@@ -1,4 +1,5 @@
-import { ethers, run } from "hardhat";
+import hre from "hardhat";
+const { ethers, run } = hre;
 
 async function main() {
   console.log("🚀 Deploying PremiumHotel to Sepolia...\n");
