@@ -27,13 +27,24 @@ cd reservation-web-app
 npm install
 ```
 
-### 2. Deploy the smart contract
+### 2. Deploy the smart contract (No Remix Needed!)
 
-1. Open [Remix IDE](https://remix.ethereum.org)
-2. Paste `PremiumHotel.sol` into Remix
-3. Compile with Solidity `^0.8.20`
-4. Connect MetaMask → select **Sepolia Testnet**
-5. Deploy → copy the **contract address**
+Create `.env.deploy` file in `reservation-web-app`:
+```bash
+cp .env.deploy.example .env.deploy
+```
+Fill in your keys in `.env.deploy`:
+```env
+PRIVATE_KEY=your_metamask_private_key_here
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_API_KEY
+ETHERSCAN_API_KEY=your_etherscan_api_key_here # optional
+```
+
+Deploy directly from terminal:
+```bash
+npm run deploy:sepolia
+```
+*The script will print the deployed contract address and automatically verify the contract on Etherscan.*
 
 ### 3. Configure environment
 
