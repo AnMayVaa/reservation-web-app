@@ -6,26 +6,20 @@ export default function WalletButton() {
   const { account, role, isConnected, isCorrectNetwork, connect, disconnect, switchToSepolia } =
     useWallet();
 
-  const roleBadge: Record<string, string> = {
-    owner: "bg-yellow-400 text-yellow-900",
-    receptionist: "bg-blue-500 text-white",
-    customer: "bg-slate-200 text-slate-700",
-  };
-
-  const roleLabel: Record<string, string> = {
-    owner: "👑 Owner",
-    receptionist: "🔑 Receptionist",
-    customer: "🧳 Guest",
+  const roleConfig: Record<string, { label: string; bg: string }> = {
+    owner: { label: "👑 Owner", bg: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
+    receptionist: { label: "🔑 Receptionist", bg: "bg-blue-500/20 text-blue-300 border-blue-500/40" },
+    customer: { label: "🧳 Guest", bg: "bg-slate-800 text-slate-300 border-slate-700" },
   };
 
   if (!isConnected) {
     return (
       <button
         onClick={connect}
-        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-white font-semibold rounded-xl shadow transition-all active:scale-95"
+        className="flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-2xl shadow-lg shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
       >
         <MetaMaskIcon />
-        Connect MetaMask
+        Connect Wallet
       </button>
     );
   }
@@ -33,29 +27,31 @@ export default function WalletButton() {
   if (!isCorrectNetwork) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-sm text-red-400 font-medium">Wrong Network</span>
         <button
           onClick={switchToSepolia}
-          className="px-3 py-1.5 bg-red-500 hover:bg-red-400 text-white text-sm font-semibold rounded-lg transition-all"
+          className="flex items-center gap-2 px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-bold rounded-2xl transition-all cursor-pointer"
         >
+          <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping" />
           Switch to Sepolia
         </button>
       </div>
     );
   }
 
+  const currentRole = roleConfig[role] || roleConfig.customer;
+
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-xs font-bold px-2 py-1 rounded-lg ${roleBadge[role]}`}>
-        {roleLabel[role]}
+      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border ${currentRole.bg}`}>
+        {currentRole.label}
       </span>
       <button
-        className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm rounded-xl border border-slate-600 transition-all"
+        className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-xs rounded-2xl border border-slate-700/80 transition-all cursor-pointer"
         title="Click to disconnect"
         onClick={disconnect}
       >
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        {account!.slice(0, 6)}…{account!.slice(-4)}
+        <span className="w-2 h-2 rounded-full bg-emerald-400" />
+        <span className="font-mono">{account!.slice(0, 6)}…{account!.slice(-4)}</span>
       </button>
     </div>
   );

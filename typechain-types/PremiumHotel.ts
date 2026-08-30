@@ -8,6 +8,7 @@ import type {
   FunctionFragment,
   Result,
   Interface,
+  EventFragment,
   AddressLike,
   ContractRunner,
   ContractMethod,
@@ -17,6 +18,7 @@ import type {
   TypedContractEvent,
   TypedDeferredTopicFilter,
   TypedEventLog,
+  TypedLogDescription,
   TypedListener,
   TypedContractMethod,
 } from "./common";
@@ -28,6 +30,10 @@ export declare namespace PremiumHotel {
     status: BigNumberish;
     occupant: AddressLike;
     bookingTime: BigNumberish;
+    name: string;
+    roomType: string;
+    imageUrl: string;
+    isActive: boolean;
   };
 
   export type RoomStructOutput = [
@@ -35,34 +41,74 @@ export declare namespace PremiumHotel {
     price: bigint,
     status: bigint,
     occupant: string,
-    bookingTime: bigint
+    bookingTime: bigint,
+    name: string,
+    roomType: string,
+    imageUrl: string,
+    isActive: boolean
   ] & {
     id: bigint;
     price: bigint;
     status: bigint;
     occupant: string;
     bookingTime: bigint;
+    name: string;
+    roomType: string;
+    imageUrl: string;
+    isActive: boolean;
   };
 }
 
 export interface PremiumHotelInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "addReceptionist"
+      | "addRoom"
       | "bookRoom"
       | "cancelReservation"
       | "checkoutRoom"
       | "confirmCheckIn"
+      | "forceResetRoom"
       | "getAllRooms"
+      | "getReceptionists"
       | "getRoomDetails"
+      | "isReceptionist"
       | "owner"
       | "payRemaining"
-      | "receptionist"
+      | "receptionistsList"
+      | "removeReceptionist"
       | "rooms"
-      | "setReceptionist"
+      | "toggleRoomActive"
       | "totalRooms"
+      | "updateRoomDetails"
+      | "updateRoomPrice"
+      | "withdrawCustom"
       | "withdrawFunds"
   ): FunctionFragment;
 
+  getEvent(
+    nameOrSignatureOrTopic:
+      | "CheckedIn"
+      | "CheckedOut"
+      | "FundsWithdrawn"
+      | "ReceptionistAdded"
+      | "ReceptionistRemoved"
+      | "RemainingPaid"
+      | "ReservationCancelled"
+      | "RoomAdded"
+      | "RoomBooked"
+      | "RoomPriceUpdated"
+      | "RoomUpdated"
+  ): EventFragment;
+
+  encodeFunctionData(
+    functionFragment: "addReceptionist",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addRoom",
+    values: [BigNumberish, string, string, string]
+  ): string;
   encodeFunctionData(
     functionFragment: "bookRoom",
     values: [BigNumberish]
@@ -80,12 +126,24 @@ export interface PremiumHotelInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "forceResetRoom",
+    values: [BigNumberish, boolean]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getAllRooms",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getReceptionists",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "getRoomDetails",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isReceptionist",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
@@ -93,23 +151,44 @@ export interface PremiumHotelInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "receptionist",
-    values?: undefined
+    functionFragment: "receptionistsList",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "removeReceptionist",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "rooms", values: [BigNumberish]): string;
   encodeFunctionData(
-    functionFragment: "setReceptionist",
-    values: [AddressLike]
+    functionFragment: "toggleRoomActive",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "totalRooms",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "updateRoomDetails",
+    values: [BigNumberish, string, string, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "updateRoomPrice",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "withdrawCustom",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "withdrawFunds",
     values?: undefined
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "addReceptionist",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "addRoom", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "bookRoom", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "cancelReservation",
@@ -124,11 +203,23 @@ export interface PremiumHotelInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "forceResetRoom",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getAllRooms",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "getReceptionists",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getRoomDetails",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isReceptionist",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
@@ -137,19 +228,253 @@ export interface PremiumHotelInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "receptionist",
+    functionFragment: "receptionistsList",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "removeReceptionist",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "rooms", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "setReceptionist",
+    functionFragment: "toggleRoomActive",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "totalRooms", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "updateRoomDetails",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "updateRoomPrice",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "withdrawCustom",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "withdrawFunds",
     data: BytesLike
   ): Result;
+}
+
+export namespace CheckedInEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    receptionist: AddressLike,
+    occupant: AddressLike
+  ];
+  export type OutputTuple = [
+    roomId: bigint,
+    receptionist: string,
+    occupant: string
+  ];
+  export interface OutputObject {
+    roomId: bigint;
+    receptionist: string;
+    occupant: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace CheckedOutEvent {
+  export type InputTuple = [roomId: BigNumberish, receptionist: AddressLike];
+  export type OutputTuple = [roomId: bigint, receptionist: string];
+  export interface OutputObject {
+    roomId: bigint;
+    receptionist: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace FundsWithdrawnEvent {
+  export type InputTuple = [
+    owner: AddressLike,
+    amount: BigNumberish,
+    remainingContractBalance: BigNumberish
+  ];
+  export type OutputTuple = [
+    owner: string,
+    amount: bigint,
+    remainingContractBalance: bigint
+  ];
+  export interface OutputObject {
+    owner: string;
+    amount: bigint;
+    remainingContractBalance: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ReceptionistAddedEvent {
+  export type InputTuple = [receptionist: AddressLike];
+  export type OutputTuple = [receptionist: string];
+  export interface OutputObject {
+    receptionist: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ReceptionistRemovedEvent {
+  export type InputTuple = [receptionist: AddressLike];
+  export type OutputTuple = [receptionist: string];
+  export interface OutputObject {
+    receptionist: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RemainingPaidEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    occupant: AddressLike,
+    remainingAmount: BigNumberish
+  ];
+  export type OutputTuple = [
+    roomId: bigint,
+    occupant: string,
+    remainingAmount: bigint
+  ];
+  export interface OutputObject {
+    roomId: bigint;
+    occupant: string;
+    remainingAmount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace ReservationCancelledEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    occupant: AddressLike,
+    refundAmount: BigNumberish
+  ];
+  export type OutputTuple = [
+    roomId: bigint,
+    occupant: string,
+    refundAmount: bigint
+  ];
+  export interface OutputObject {
+    roomId: bigint;
+    occupant: string;
+    refundAmount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoomAddedEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    name: string,
+    price: BigNumberish,
+    roomType: string
+  ];
+  export type OutputTuple = [
+    roomId: bigint,
+    name: string,
+    price: bigint,
+    roomType: string
+  ];
+  export interface OutputObject {
+    roomId: bigint;
+    name: string;
+    price: bigint;
+    roomType: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoomBookedEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    occupant: AddressLike,
+    deposit: BigNumberish
+  ];
+  export type OutputTuple = [roomId: bigint, occupant: string, deposit: bigint];
+  export interface OutputObject {
+    roomId: bigint;
+    occupant: string;
+    deposit: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoomPriceUpdatedEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    oldPrice: BigNumberish,
+    newPrice: BigNumberish
+  ];
+  export type OutputTuple = [
+    roomId: bigint,
+    oldPrice: bigint,
+    newPrice: bigint
+  ];
+  export interface OutputObject {
+    roomId: bigint;
+    oldPrice: bigint;
+    newPrice: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RoomUpdatedEvent {
+  export type InputTuple = [
+    roomId: BigNumberish,
+    price: BigNumberish,
+    name: string,
+    roomType: string,
+    isActive: boolean
+  ];
+  export type OutputTuple = [
+    roomId: bigint,
+    price: bigint,
+    name: string,
+    roomType: string,
+    isActive: boolean
+  ];
+  export interface OutputObject {
+    roomId: bigint;
+    price: bigint;
+    name: string;
+    roomType: string;
+    isActive: boolean;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export interface PremiumHotel extends BaseContract {
@@ -195,6 +520,18 @@ export interface PremiumHotel extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  addReceptionist: TypedContractMethod<
+    [_receptionist: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  addRoom: TypedContractMethod<
+    [_price: BigNumberish, _name: string, _roomType: string, _imageUrl: string],
+    [void],
+    "nonpayable"
+  >;
+
   bookRoom: TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
 
   cancelReservation: TypedContractMethod<
@@ -215,11 +552,19 @@ export interface PremiumHotel extends BaseContract {
     "nonpayable"
   >;
 
+  forceResetRoom: TypedContractMethod<
+    [_roomId: BigNumberish, _refundOccupant: boolean],
+    [void],
+    "nonpayable"
+  >;
+
   getAllRooms: TypedContractMethod<
     [],
     [PremiumHotel.RoomStructOutput[]],
     "view"
   >;
+
+  getReceptionists: TypedContractMethod<[], [string[]], "view">;
 
   getRoomDetails: TypedContractMethod<
     [_roomId: BigNumberish],
@@ -227,33 +572,82 @@ export interface PremiumHotel extends BaseContract {
     "view"
   >;
 
+  isReceptionist: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
   owner: TypedContractMethod<[], [string], "view">;
 
   payRemaining: TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
 
-  receptionist: TypedContractMethod<[], [string], "view">;
-
-  rooms: TypedContractMethod<
+  receptionistsList: TypedContractMethod<
     [arg0: BigNumberish],
-    [
-      [bigint, bigint, bigint, string, bigint] & {
-        id: bigint;
-        price: bigint;
-        status: bigint;
-        occupant: string;
-        bookingTime: bigint;
-      }
-    ],
+    [string],
     "view"
   >;
 
-  setReceptionist: TypedContractMethod<
+  removeReceptionist: TypedContractMethod<
     [_receptionist: AddressLike],
     [void],
     "nonpayable"
   >;
 
+  rooms: TypedContractMethod<
+    [arg0: BigNumberish],
+    [
+      [
+        bigint,
+        bigint,
+        bigint,
+        string,
+        bigint,
+        string,
+        string,
+        string,
+        boolean
+      ] & {
+        id: bigint;
+        price: bigint;
+        status: bigint;
+        occupant: string;
+        bookingTime: bigint;
+        name: string;
+        roomType: string;
+        imageUrl: string;
+        isActive: boolean;
+      }
+    ],
+    "view"
+  >;
+
+  toggleRoomActive: TypedContractMethod<
+    [_roomId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   totalRooms: TypedContractMethod<[], [bigint], "view">;
+
+  updateRoomDetails: TypedContractMethod<
+    [
+      _roomId: BigNumberish,
+      _name: string,
+      _roomType: string,
+      _imageUrl: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
+  updateRoomPrice: TypedContractMethod<
+    [_roomId: BigNumberish, _newPrice: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  withdrawCustom: TypedContractMethod<
+    [_amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   withdrawFunds: TypedContractMethod<[], [void], "nonpayable">;
 
@@ -261,6 +655,16 @@ export interface PremiumHotel extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "addReceptionist"
+  ): TypedContractMethod<[_receptionist: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "addRoom"
+  ): TypedContractMethod<
+    [_price: BigNumberish, _name: string, _roomType: string, _imageUrl: string],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "bookRoom"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
@@ -274,8 +678,18 @@ export interface PremiumHotel extends BaseContract {
     nameOrSignature: "confirmCheckIn"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "forceResetRoom"
+  ): TypedContractMethod<
+    [_roomId: BigNumberish, _refundOccupant: boolean],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "getAllRooms"
   ): TypedContractMethod<[], [PremiumHotel.RoomStructOutput[]], "view">;
+  getFunction(
+    nameOrSignature: "getReceptionists"
+  ): TypedContractMethod<[], [string[]], "view">;
   getFunction(
     nameOrSignature: "getRoomDetails"
   ): TypedContractMethod<
@@ -284,38 +698,279 @@ export interface PremiumHotel extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "isReceptionist"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "payRemaining"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
   getFunction(
-    nameOrSignature: "receptionist"
-  ): TypedContractMethod<[], [string], "view">;
+    nameOrSignature: "receptionistsList"
+  ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
+  getFunction(
+    nameOrSignature: "removeReceptionist"
+  ): TypedContractMethod<[_receptionist: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "rooms"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, bigint, bigint, string, bigint] & {
+      [
+        bigint,
+        bigint,
+        bigint,
+        string,
+        bigint,
+        string,
+        string,
+        string,
+        boolean
+      ] & {
         id: bigint;
         price: bigint;
         status: bigint;
         occupant: string;
         bookingTime: bigint;
+        name: string;
+        roomType: string;
+        imageUrl: string;
+        isActive: boolean;
       }
     ],
     "view"
   >;
   getFunction(
-    nameOrSignature: "setReceptionist"
-  ): TypedContractMethod<[_receptionist: AddressLike], [void], "nonpayable">;
+    nameOrSignature: "toggleRoomActive"
+  ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "totalRooms"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "updateRoomDetails"
+  ): TypedContractMethod<
+    [
+      _roomId: BigNumberish,
+      _name: string,
+      _roomType: string,
+      _imageUrl: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "updateRoomPrice"
+  ): TypedContractMethod<
+    [_roomId: BigNumberish, _newPrice: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "withdrawCustom"
+  ): TypedContractMethod<[_amount: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "withdrawFunds"
   ): TypedContractMethod<[], [void], "nonpayable">;
 
-  filters: {};
+  getEvent(
+    key: "CheckedIn"
+  ): TypedContractEvent<
+    CheckedInEvent.InputTuple,
+    CheckedInEvent.OutputTuple,
+    CheckedInEvent.OutputObject
+  >;
+  getEvent(
+    key: "CheckedOut"
+  ): TypedContractEvent<
+    CheckedOutEvent.InputTuple,
+    CheckedOutEvent.OutputTuple,
+    CheckedOutEvent.OutputObject
+  >;
+  getEvent(
+    key: "FundsWithdrawn"
+  ): TypedContractEvent<
+    FundsWithdrawnEvent.InputTuple,
+    FundsWithdrawnEvent.OutputTuple,
+    FundsWithdrawnEvent.OutputObject
+  >;
+  getEvent(
+    key: "ReceptionistAdded"
+  ): TypedContractEvent<
+    ReceptionistAddedEvent.InputTuple,
+    ReceptionistAddedEvent.OutputTuple,
+    ReceptionistAddedEvent.OutputObject
+  >;
+  getEvent(
+    key: "ReceptionistRemoved"
+  ): TypedContractEvent<
+    ReceptionistRemovedEvent.InputTuple,
+    ReceptionistRemovedEvent.OutputTuple,
+    ReceptionistRemovedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RemainingPaid"
+  ): TypedContractEvent<
+    RemainingPaidEvent.InputTuple,
+    RemainingPaidEvent.OutputTuple,
+    RemainingPaidEvent.OutputObject
+  >;
+  getEvent(
+    key: "ReservationCancelled"
+  ): TypedContractEvent<
+    ReservationCancelledEvent.InputTuple,
+    ReservationCancelledEvent.OutputTuple,
+    ReservationCancelledEvent.OutputObject
+  >;
+  getEvent(
+    key: "RoomAdded"
+  ): TypedContractEvent<
+    RoomAddedEvent.InputTuple,
+    RoomAddedEvent.OutputTuple,
+    RoomAddedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RoomBooked"
+  ): TypedContractEvent<
+    RoomBookedEvent.InputTuple,
+    RoomBookedEvent.OutputTuple,
+    RoomBookedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RoomPriceUpdated"
+  ): TypedContractEvent<
+    RoomPriceUpdatedEvent.InputTuple,
+    RoomPriceUpdatedEvent.OutputTuple,
+    RoomPriceUpdatedEvent.OutputObject
+  >;
+  getEvent(
+    key: "RoomUpdated"
+  ): TypedContractEvent<
+    RoomUpdatedEvent.InputTuple,
+    RoomUpdatedEvent.OutputTuple,
+    RoomUpdatedEvent.OutputObject
+  >;
+
+  filters: {
+    "CheckedIn(uint256,address,address)": TypedContractEvent<
+      CheckedInEvent.InputTuple,
+      CheckedInEvent.OutputTuple,
+      CheckedInEvent.OutputObject
+    >;
+    CheckedIn: TypedContractEvent<
+      CheckedInEvent.InputTuple,
+      CheckedInEvent.OutputTuple,
+      CheckedInEvent.OutputObject
+    >;
+
+    "CheckedOut(uint256,address)": TypedContractEvent<
+      CheckedOutEvent.InputTuple,
+      CheckedOutEvent.OutputTuple,
+      CheckedOutEvent.OutputObject
+    >;
+    CheckedOut: TypedContractEvent<
+      CheckedOutEvent.InputTuple,
+      CheckedOutEvent.OutputTuple,
+      CheckedOutEvent.OutputObject
+    >;
+
+    "FundsWithdrawn(address,uint256,uint256)": TypedContractEvent<
+      FundsWithdrawnEvent.InputTuple,
+      FundsWithdrawnEvent.OutputTuple,
+      FundsWithdrawnEvent.OutputObject
+    >;
+    FundsWithdrawn: TypedContractEvent<
+      FundsWithdrawnEvent.InputTuple,
+      FundsWithdrawnEvent.OutputTuple,
+      FundsWithdrawnEvent.OutputObject
+    >;
+
+    "ReceptionistAdded(address)": TypedContractEvent<
+      ReceptionistAddedEvent.InputTuple,
+      ReceptionistAddedEvent.OutputTuple,
+      ReceptionistAddedEvent.OutputObject
+    >;
+    ReceptionistAdded: TypedContractEvent<
+      ReceptionistAddedEvent.InputTuple,
+      ReceptionistAddedEvent.OutputTuple,
+      ReceptionistAddedEvent.OutputObject
+    >;
+
+    "ReceptionistRemoved(address)": TypedContractEvent<
+      ReceptionistRemovedEvent.InputTuple,
+      ReceptionistRemovedEvent.OutputTuple,
+      ReceptionistRemovedEvent.OutputObject
+    >;
+    ReceptionistRemoved: TypedContractEvent<
+      ReceptionistRemovedEvent.InputTuple,
+      ReceptionistRemovedEvent.OutputTuple,
+      ReceptionistRemovedEvent.OutputObject
+    >;
+
+    "RemainingPaid(uint256,address,uint256)": TypedContractEvent<
+      RemainingPaidEvent.InputTuple,
+      RemainingPaidEvent.OutputTuple,
+      RemainingPaidEvent.OutputObject
+    >;
+    RemainingPaid: TypedContractEvent<
+      RemainingPaidEvent.InputTuple,
+      RemainingPaidEvent.OutputTuple,
+      RemainingPaidEvent.OutputObject
+    >;
+
+    "ReservationCancelled(uint256,address,uint256)": TypedContractEvent<
+      ReservationCancelledEvent.InputTuple,
+      ReservationCancelledEvent.OutputTuple,
+      ReservationCancelledEvent.OutputObject
+    >;
+    ReservationCancelled: TypedContractEvent<
+      ReservationCancelledEvent.InputTuple,
+      ReservationCancelledEvent.OutputTuple,
+      ReservationCancelledEvent.OutputObject
+    >;
+
+    "RoomAdded(uint256,string,uint256,string)": TypedContractEvent<
+      RoomAddedEvent.InputTuple,
+      RoomAddedEvent.OutputTuple,
+      RoomAddedEvent.OutputObject
+    >;
+    RoomAdded: TypedContractEvent<
+      RoomAddedEvent.InputTuple,
+      RoomAddedEvent.OutputTuple,
+      RoomAddedEvent.OutputObject
+    >;
+
+    "RoomBooked(uint256,address,uint256)": TypedContractEvent<
+      RoomBookedEvent.InputTuple,
+      RoomBookedEvent.OutputTuple,
+      RoomBookedEvent.OutputObject
+    >;
+    RoomBooked: TypedContractEvent<
+      RoomBookedEvent.InputTuple,
+      RoomBookedEvent.OutputTuple,
+      RoomBookedEvent.OutputObject
+    >;
+
+    "RoomPriceUpdated(uint256,uint256,uint256)": TypedContractEvent<
+      RoomPriceUpdatedEvent.InputTuple,
+      RoomPriceUpdatedEvent.OutputTuple,
+      RoomPriceUpdatedEvent.OutputObject
+    >;
+    RoomPriceUpdated: TypedContractEvent<
+      RoomPriceUpdatedEvent.InputTuple,
+      RoomPriceUpdatedEvent.OutputTuple,
+      RoomPriceUpdatedEvent.OutputObject
+    >;
+
+    "RoomUpdated(uint256,uint256,string,string,bool)": TypedContractEvent<
+      RoomUpdatedEvent.InputTuple,
+      RoomUpdatedEvent.OutputTuple,
+      RoomUpdatedEvent.OutputObject
+    >;
+    RoomUpdated: TypedContractEvent<
+      RoomUpdatedEvent.InputTuple,
+      RoomUpdatedEvent.OutputTuple,
+      RoomUpdatedEvent.OutputObject
+    >;
+  };
 }

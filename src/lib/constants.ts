@@ -1,17 +1,26 @@
 // ============================================================
 // Contract Configuration
-// Fill NEXT_PUBLIC_CONTRACT_ADDRESS after deploying on Sepolia
+// Paste your deployed contract address here or set in .env.local
 // ============================================================
 
 export const CONTRACT_ADDRESS =
-  (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`) ?? "0x0000000000000000000000000000000000000000";
+  (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`) ||
+  "0x0000000000000000000000000000000000000000";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";
 
-export const SEPOLIA_RPC_URL = "https://rpc.sepolia.org";
+// Multi-RPC fallbacks for stable Sepolia connectivity
+export const SEPOLIA_RPC_URLS = [
+  "https://ethereum-sepolia-rpc.publicnode.com",
+  "https://rpc.sepolia.org",
+  "https://rpc2.sepolia.org",
+  "https://sepolia.gateway.tenderly.co",
+];
 
-// Room status enum — must match Solidity enum order
+export const SEPOLIA_RPC_URL = SEPOLIA_RPC_URLS[0];
+
+// Room status enum — matches Solidity enum order
 export enum RoomStatus {
   Available = 0,
   Booked = 1,
@@ -21,14 +30,21 @@ export enum RoomStatus {
 
 export const ROOM_STATUS_LABELS: Record<RoomStatus, string> = {
   [RoomStatus.Available]: "Available",
-  [RoomStatus.Booked]: "Booked",
-  [RoomStatus.PaidWaitingForKey]: "Paid — Awaiting Key",
+  [RoomStatus.Booked]: "Booked (50% Paid)",
+  [RoomStatus.PaidWaitingForKey]: "Paid (Awaiting Key)",
   [RoomStatus.CheckedIn]: "Checked In",
 };
 
 export const ROOM_STATUS_COLORS: Record<RoomStatus, string> = {
-  [RoomStatus.Available]: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  [RoomStatus.Booked]: "bg-amber-100 text-amber-800 border-amber-300",
-  [RoomStatus.PaidWaitingForKey]: "bg-blue-100 text-blue-800 border-blue-300",
-  [RoomStatus.CheckedIn]: "bg-purple-100 text-purple-800 border-purple-300",
+  [RoomStatus.Available]: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  [RoomStatus.Booked]: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  [RoomStatus.PaidWaitingForKey]: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+  [RoomStatus.CheckedIn]: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+};
+
+export const DEFAULT_ROOM_IMAGES: Record<string, string> = {
+  Deluxe: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80",
+  Suite: "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80",
+  Penthouse: "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&auto=format&fit=crop&q=80",
+  Standard: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&auto=format&fit=crop&q=80",
 };

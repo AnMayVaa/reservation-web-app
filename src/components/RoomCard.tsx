@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ethers } from "ethers";
 import { RoomStatus } from "@/lib/constants";
 import { useWallet } from "@/hooks/useWallet";
@@ -9,20 +10,31 @@ import StatusBadge from "@/components/StatusBadge";
 
 interface RoomCardProps {
   room: Room;
+  onEdit?: (room: Room) => void;
 }
 
-export default function RoomCard({ room }: RoomCardProps) {
-  const { account, isConnected, isCorrectNetwork } = useWallet();
-  const { bookRoom, cancelReservation, payRemaining, txPending, error, setError } = useContract();
+export default function RoomCard({ room, onEdit }: RoomCardProps) {
+  const { account, role, isConnected, isCorrectNetwork } = useWallet();
+  const {
+    bookRoom,
+    cancelReservation,
+    payRemaining,
+    toggleRoomActive,
+    forceResetRoom,
+    txPending,
+    error,
+    setError,
+  } = useContract();
+
   const [localError, setLocalError] = useState<string | null>(null);
   const [localPending, setLocalPending] = useState(false);
 
   const isMyRoom =
     account && room.occupant.toLowerCase() === account.toLowerCase();
+  const isOwner = role === "owner";
   const priceEth = ethers.formatEther(room.price);
   const depositEth = ethers.formatEther(room.price / 2n);
   const isPending = localPending || txPending;
-
   const canInteract = isConnected && isCorrectNetwork;
 
   async function handle(fn: () => Promise<void>) {
@@ -32,7 +44,10 @@ export default function RoomCard({ room }: RoomCardProps) {
     try {
       await fn();
     } catch (e: unknown) {
-      const msg = (e as { reason?: string; message?: string }).reason ?? (e as { message?: string }).message ?? "Transaction failed";
+      const msg =
+        (e as { reason?: string; message?: string }).reason ??
+        (e as { message?: string }).message ??
+        "Transaction failed";
       setLocalError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
     } finally {
       setLocalPending(false);
@@ -41,7 +56,7 @@ export default function RoomCard({ room }: RoomCardProps) {
 
   const displayError = localError ?? (error && isMyRoom ? error : null);
 
-  // Booking deadline countdown
+  // Cancellation countdown
   const bookingDeadline =
     room.bookingTime > 0n
       ? new Date((Number(room.bookingTime) + 86400) * 1000)
@@ -51,119 +66,189 @@ export default function RoomCard({ room }: RoomCardProps) {
     : null;
 
   return (
-    <div className={`relative flex flex-col rounded-2xl border bg-slate-800 shadow-lg overflow-hidden transition-all
-      ${room.status === RoomStatus.Available ? "border-emerald-700/50 hover:border-emerald-500/70 hover:shadow-emerald-900/40 hover:shadow-xl" : "border-slate-700"}
-    `}>
-      {/* Room header */}
-      <div className="relative h-36 bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center overflow-hidden">
-        <span className="text-6xl opacity-40 select-none">🛏</span>
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-800/80 to-transparent" />
-        <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
-          <h2 className="text-white font-bold text-xl">Room {room.id.toString()}</h2>
-          <StatusBadge status={room.status} />
+    <div
+      className={`group relative flex flex-col rounded-3xl border bg-slate-900/90 shadow-xl overflow-hidden transition-all duration-300 hover:shadow-2xl ${
+        !room.isActive
+          ? "border-slate-800 opacity-60"
+          : room.status === RoomStatus.Available
+          ? "border-emerald-500/30 hover:border-emerald-400/60 hover:shadow-emerald-950/30"
+          : isMyRoom
+          ? "border-amber-500/50 shadow-amber-950/30 ring-1 ring-amber-500/30"
+          : "border-slate-800 hover:border-slate-700"
+      }`}
+    >
+      {/* Room Photo Banner */}
+      <div className="relative h-48 w-full overflow-hidden bg-slate-800">
+        <Image
+          src={room.imageUrl}
+          alt={room.name}
+          fill
+          unoptimized
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          className="object-cover group-hover:scale-105 transition-transform duration-500"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/30 to-transparent" />
+
+        {/* Top Badges */}
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+          <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-900/80 backdrop-blur-md text-amber-300 border border-slate-700 shadow-md">
+            {room.roomType}
+          </span>
+          <StatusBadge status={room.status} isActive={room.isActive} />
+        </div>
+
+        {/* Room Header Info */}
+        <div className="absolute bottom-3 left-4 right-4">
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-lg font-bold text-white tracking-tight drop-shadow truncate">
+              {room.name}
+            </h3>
+            <span className="text-xs font-mono text-slate-400 ml-2">#{room.id.toString()}</span>
+          </div>
         </div>
       </div>
 
-      {/* Room info */}
-      <div className="flex-1 p-4 space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-400">Full Price</span>
-          <span className="text-white font-semibold">{priceEth} ETH</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-400">50% Deposit</span>
-          <span className="text-amber-400 font-semibold">{depositEth} ETH</span>
+      {/* Card Body */}
+      <div className="flex-1 p-5 space-y-4">
+        {/* Pricing Matrix */}
+        <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-slate-800/60 border border-slate-700/50">
+          <div>
+            <span className="text-[11px] text-slate-400 uppercase tracking-wider block">Full Price</span>
+            <span className="text-base font-bold text-white">{priceEth} ETH</span>
+          </div>
+          <div className="text-right">
+            <span className="text-[11px] text-amber-400/90 uppercase tracking-wider block">50% Deposit</span>
+            <span className="text-base font-bold text-amber-400">{depositEth} ETH</span>
+          </div>
         </div>
 
-        {/* Occupant info */}
+        {/* Occupant Info */}
         {room.occupant !== "0x0000000000000000000000000000000000000000" && (
-          <div className="text-xs text-slate-400 truncate pt-1 border-t border-slate-700">
-            Booked by:{" "}
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+            <span className="text-slate-400">Occupant</span>
             <a
               href={`https://sepolia.etherscan.io/address/${room.occupant}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 font-mono"
+              className="text-blue-400 hover:text-blue-300 font-mono hover:underline truncate max-w-[140px]"
             >
-              {room.occupant.slice(0, 8)}…{room.occupant.slice(-6)}
+              {isMyRoom ? "🌟 You (" + room.occupant.slice(0, 6) + "…)" : room.occupant.slice(0, 6) + "…" + room.occupant.slice(-4)}
             </a>
           </div>
         )}
 
-        {/* Cancellation window */}
+        {/* 24h Cancellation Window Notice */}
         {isMyRoom && room.status === RoomStatus.Booked && hoursLeft !== null && (
-          <div className={`text-xs px-2 py-1.5 rounded-lg ${hoursLeft > 0 ? "bg-emerald-900/40 text-emerald-400" : "bg-red-900/40 text-red-400"}`}>
+          <div
+            className={`text-xs px-3 py-2 rounded-xl border ${
+              hoursLeft > 0
+                ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
+                : "bg-rose-500/10 text-rose-300 border-rose-500/20"
+            }`}
+          >
             {hoursLeft > 0
-              ? `✅ Free cancel window: ~${hoursLeft}h left`
-              : "⚠️ Cancellation window expired — deposit forfeited"}
+              ? `⏱️ Free refund cancel: ~${hoursLeft}h left`
+              : "⚠️ 24h refund window expired (Deposit forfeited if cancelled)"}
           </div>
         )}
 
-        {/* Error display */}
+        {/* Error message */}
         {displayError && (
-          <div className="text-xs text-red-400 bg-red-900/30 rounded-lg px-3 py-2 break-words">
+          <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-3 break-words">
             {displayError}
           </div>
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="p-4 pt-0 space-y-2">
-        {/* AVAILABLE — book */}
-        {room.status === RoomStatus.Available && (
+      {/* Card Actions */}
+      <div className="p-5 pt-0 space-y-2">
+        {/* Guest: Available to Book */}
+        {room.isActive && room.status === RoomStatus.Available && (
           <button
             disabled={!canInteract || isPending}
             onClick={() => handle(() => bookRoom(room.id, room.price / 2n))}
-            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold text-sm transition-all active:scale-95"
+            className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
           >
-            {isPending ? <Spinner /> : `Book — Pay ${depositEth} ETH`}
+            {isPending ? <Spinner /> : `Book Room · Pay ${depositEth} ETH`}
           </button>
         )}
 
-        {/* BOOKED — pay remaining or cancel */}
+        {/* Guest: Booked by connected wallet */}
         {room.status === RoomStatus.Booked && isMyRoom && (
-          <>
+          <div className="space-y-2">
             <button
               disabled={!canInteract || isPending}
               onClick={() => handle(() => payRemaining(room.id, room.price / 2n))}
-              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold text-sm transition-all active:scale-95"
+              className="w-full py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-sm shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {isPending ? <Spinner /> : `Pay Remaining ${depositEth} ETH`}
             </button>
             <button
               disabled={!canInteract || isPending}
               onClick={() => handle(() => cancelReservation(room.id))}
-              className="w-full py-2 rounded-xl bg-transparent hover:bg-red-900/30 border border-red-700/50 text-red-400 hover:text-red-300 text-sm transition-all"
+              className="w-full py-2 rounded-2xl border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 text-xs font-semibold transition"
             >
-              Cancel Booking
+              Cancel Reservation
             </button>
-          </>
+          </div>
         )}
 
-        {/* BOOKED — not your room */}
+        {/* Guest: Booked by someone else */}
         {room.status === RoomStatus.Booked && !isMyRoom && (
-          <div className="text-center text-xs text-slate-500 py-1">Reserved by another guest</div>
+          <div className="text-center text-xs text-slate-500 py-2 bg-slate-800/40 rounded-2xl">
+            Reserved by another guest
+          </div>
         )}
 
-        {/* PAID WAITING */}
+        {/* Paid & Waiting for Key */}
         {room.status === RoomStatus.PaidWaitingForKey && (
-          <div className="text-center text-sm text-blue-400 bg-blue-900/20 rounded-xl py-2.5 px-3">
+          <div className="text-center text-xs font-semibold text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-2xl py-3 px-3">
             {isMyRoom
-              ? "✅ Payment complete — visit the front desk to check in"
-              : "Awaiting receptionist confirmation"}
+              ? "🎉 Payment Complete! Visit the front desk for check-in."
+              : "Fully Paid — Awaiting Front Desk Check-in"}
           </div>
         )}
 
-        {/* CHECKED IN */}
+        {/* Checked In */}
         {room.status === RoomStatus.CheckedIn && (
-          <div className="text-center text-sm text-purple-400 bg-purple-900/20 rounded-xl py-2.5 px-3">
-            {isMyRoom ? "🏠 Welcome! Enjoy your stay." : "Currently occupied"}
+          <div className="text-center text-xs font-semibold text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-2xl py-3 px-3">
+            {isMyRoom ? "🏨 Currently enjoying stay" : "Occupied"}
           </div>
         )}
 
-        {/* Not connected notice */}
-        {!canInteract && room.status === RoomStatus.Available && (
-          <p className="text-center text-xs text-slate-500">Connect MetaMask to book</p>
+        {/* Inactive Room Notice */}
+        {!room.isActive && (
+          <div className="text-center text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-2xl py-2 px-3">
+            Unavailable (Under Maintenance)
+          </div>
+        )}
+
+        {/* Owner Admin Bar for this Room */}
+        {isOwner && (
+          <div className="pt-2 mt-2 border-t border-slate-800/80 grid grid-cols-3 gap-1.5 text-[11px]">
+            <button
+              onClick={() => onEdit?.(room)}
+              className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition flex items-center justify-center gap-1"
+            >
+              ✏️ Edit
+            </button>
+            <button
+              disabled={isPending || room.status !== 0}
+              onClick={() => handle(() => toggleRoomActive(room.id))}
+              title={room.status !== 0 ? "Cannot toggle status of occupied room" : ""}
+              className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-xl transition flex items-center justify-center gap-1"
+            >
+              {room.isActive ? "⏸️ Pause" : "▶️ Active"}
+            </button>
+            <button
+              disabled={isPending || room.status === 0}
+              onClick={() => handle(() => forceResetRoom(room.id, true))}
+              title="Force reset room status back to available"
+              className="py-1.5 px-2 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 text-rose-400 rounded-xl transition flex items-center justify-center gap-1"
+            >
+              🔄 Reset
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -172,12 +257,9 @@ export default function RoomCard({ room }: RoomCardProps) {
 
 function Spinner() {
   return (
-    <span className="flex items-center justify-center gap-2">
-      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-      </svg>
-      Waiting for confirmation…
-    </span>
+    <>
+      <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      Confirming on-chain...
+    </>
   );
 }

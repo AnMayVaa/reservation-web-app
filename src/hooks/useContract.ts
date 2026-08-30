@@ -2,101 +2,167 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ethers } from "ethers";
-import { CONTRACT_ADDRESS, SEPOLIA_RPC_URL } from "@/lib/constants";
+import { CONTRACT_ADDRESS, SEPOLIA_RPC_URLS, DEFAULT_ROOM_IMAGES } from "@/lib/constants";
 import { PREMIUM_HOTEL_ABI } from "@/lib/abi";
 import { useWallet } from "@/hooks/useWallet";
 
-// ── Shared Room type ──────────────────────────────────────
 export interface Room {
   id: bigint;
   price: bigint;
   status: number;
   occupant: string;
   bookingTime: bigint;
+  name: string;
+  roomType: string;
+  imageUrl: string;
+  isActive: boolean;
 }
 
-// Get a read-only contract (no wallet needed)
-function getReadContract() {
-  const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
-  return new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, provider);
+// Fallback demo rooms if contract not deployed yet
+const DEMO_ROOMS: Room[] = [
+  {
+    id: 1n,
+    price: ethers.parseEther("0.05"),
+    status: 0,
+    occupant: "0x0000000000000000000000000000000000000000",
+    bookingTime: 0n,
+    name: "Ocean View Deluxe",
+    roomType: "Deluxe",
+    imageUrl: DEFAULT_ROOM_IMAGES.Deluxe,
+    isActive: true,
+  },
+  {
+    id: 2n,
+    price: ethers.parseEther("0.08"),
+    status: 0,
+    occupant: "0x0000000000000000000000000000000000000000",
+    bookingTime: 0n,
+    name: "Executive Sky Suite",
+    roomType: "Suite",
+    imageUrl: DEFAULT_ROOM_IMAGES.Suite,
+    isActive: true,
+  },
+  {
+    id: 3n,
+    price: ethers.parseEther("0.12"),
+    status: 0,
+    occupant: "0x0000000000000000000000000000000000000000",
+    bookingTime: 0n,
+    name: "Presidential Royal Villa",
+    roomType: "Penthouse",
+    imageUrl: DEFAULT_ROOM_IMAGES.Penthouse,
+    isActive: true,
+  },
+];
+
+async function getWorkingProvider(): Promise<ethers.JsonRpcProvider> {
+  for (const url of SEPOLIA_RPC_URLS) {
+    try {
+      const p = new ethers.JsonRpcProvider(url);
+      await p.getBlockNumber();
+      return p;
+    } catch {
+      continue;
+    }
+  }
+  return new ethers.JsonRpcProvider(SEPOLIA_RPC_URLS[0]);
 }
 
-// Get a write contract (requires signer)
-function getWriteContract(signer: ethers.JsonRpcSigner) {
-  return new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, signer);
-}
-
-// ── useContract hook ──────────────────────────────────────
 export function useContract() {
-  const { signer, isConnected, isCorrectNetwork } = useWallet();
+  const { signer, isConnected, isCorrectNetwork, refreshRole } = useWallet();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [receptionists, setReceptionists] = useState<string[]>([]);
   const [contractBalance, setContractBalance] = useState<bigint>(0n);
   const [loading, setLoading] = useState(true);
   const [txPending, setTxPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // Fetch all rooms from the chain
+  const isContractConfigured =
+    CONTRACT_ADDRESS &&
+    CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
+
+  // Fetch all rooms from contract or use demo fallback
   const fetchRooms = useCallback(async () => {
+    if (!isContractConfigured) {
+      setRooms(DEMO_ROOMS);
+      setIsDemoMode(true);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const contract = getReadContract();
-      const raw = await contract.getAllRooms();
+      const provider = await getWorkingProvider();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, provider);
+      
+      const [rawRooms, recepsList, bal] = await Promise.all([
+        contract.getAllRooms(),
+        contract.getReceptionists().catch(() => []),
+        provider.getBalance(CONTRACT_ADDRESS).catch(() => 0n),
+      ]);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped: Room[] = raw.map((r: any) => ({
+      const mapped: Room[] = rawRooms.map((r: any) => ({
         id: BigInt(r.id),
         price: BigInt(r.price),
         status: Number(r.status),
         occupant: r.occupant as string,
         bookingTime: BigInt(r.bookingTime),
+        name: r.name || `Room ${r.id}`,
+        roomType: r.roomType || "Standard",
+        imageUrl: r.imageUrl || DEFAULT_ROOM_IMAGES.Standard,
+        isActive: r.isActive !== undefined ? Boolean(r.isActive) : true,
       }));
+
       setRooms(mapped);
+      setReceptionists(recepsList);
+      setContractBalance(bal);
+      setIsDemoMode(false);
     } catch (e) {
-      console.error("fetchRooms error:", e);
+      console.warn("Error fetching on-chain data, falling back to demo:", e);
+      setRooms(DEMO_ROOMS);
+      setIsDemoMode(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isContractConfigured]);
 
-  const fetchBalance = useCallback(async () => {
-    try {
-      const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
-      const bal = await provider.getBalance(CONTRACT_ADDRESS);
-      setContractBalance(bal);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  // Poll every 8 seconds for live updates
   useEffect(() => {
     fetchRooms();
-    fetchBalance();
-    const id = setInterval(() => { fetchRooms(); fetchBalance(); }, 8000);
-    return () => clearInterval(id);
-  }, [fetchRooms, fetchBalance]);
+    const interval = setInterval(fetchRooms, 8000);
+    return () => clearInterval(interval);
+  }, [fetchRooms]);
 
-  // ── Write helpers ─────────────────────────────────────
+  // Execute transaction helper
   const sendTx = useCallback(
     async (fn: (contract: ethers.Contract) => Promise<ethers.ContractTransactionResponse>) => {
-      if (!signer) throw new Error("Wallet not connected");
+      if (!signer) throw new Error("Wallet not connected. Please connect MetaMask.");
+      if (isDemoMode) {
+        throw new Error("Contract address is not configured yet. Please deploy the contract and add the address.");
+      }
       setTxPending(true);
       setError(null);
       try {
-        const contract = getWriteContract(signer);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, signer);
         const tx = await fn(contract);
         await tx.wait();
         await fetchRooms();
-        await fetchBalance();
+        await refreshRole();
       } catch (e: unknown) {
-        const msg = (e as { reason?: string; message?: string }).reason ?? (e as { message?: string }).message ?? "Transaction failed";
+        const msg =
+          (e as { reason?: string; message?: string }).reason ??
+          (e as { message?: string }).message ??
+          "Transaction failed";
         setError(msg);
         throw e;
       } finally {
         setTxPending(false);
       }
     },
-    [signer, fetchRooms, fetchBalance]
+    [signer, isDemoMode, fetchRooms, refreshRole]
   );
 
+  // ── Customer Functions ────────────────────────────────
   const bookRoom = useCallback(
     (roomId: bigint, depositWei: bigint) =>
       sendTx((c) => c.bookRoom(roomId, { value: depositWei })),
@@ -114,6 +180,7 @@ export function useContract() {
     [sendTx]
   );
 
+  // ── Receptionist Functions ────────────────────────────
   const confirmCheckIn = useCallback(
     (roomId: bigint) => sendTx((c) => c.confirmCheckIn(roomId)),
     [sendTx]
@@ -124,8 +191,60 @@ export function useContract() {
     [sendTx]
   );
 
-  const setReceptionist = useCallback(
-    (address: string) => sendTx((c) => c.setReceptionist(address)),
+  // ── Owner Functions: Room Management ──────────────────
+  const addRoom = useCallback(
+    (priceEth: string, name: string, roomType: string, imageUrl: string) => {
+      const priceWei = ethers.parseEther(priceEth);
+      const img = imageUrl || DEFAULT_ROOM_IMAGES[roomType] || DEFAULT_ROOM_IMAGES.Standard;
+      return sendTx((c) => c.addRoom(priceWei, name, roomType, img));
+    },
+    [sendTx]
+  );
+
+  const updateRoomPrice = useCallback(
+    (roomId: bigint, newPriceEth: string) => {
+      const newPriceWei = ethers.parseEther(newPriceEth);
+      return sendTx((c) => c.updateRoomPrice(roomId, newPriceWei));
+    },
+    [sendTx]
+  );
+
+  const updateRoomDetails = useCallback(
+    (roomId: bigint, name: string, roomType: string, imageUrl: string) => {
+      const img = imageUrl || DEFAULT_ROOM_IMAGES[roomType] || DEFAULT_ROOM_IMAGES.Standard;
+      return sendTx((c) => c.updateRoomDetails(roomId, name, roomType, img));
+    },
+    [sendTx]
+  );
+
+  const toggleRoomActive = useCallback(
+    (roomId: bigint) => sendTx((c) => c.toggleRoomActive(roomId)),
+    [sendTx]
+  );
+
+  const forceResetRoom = useCallback(
+    (roomId: bigint, refundOccupant: boolean) =>
+      sendTx((c) => c.forceResetRoom(roomId, refundOccupant)),
+    [sendTx]
+  );
+
+  // ── Owner Functions: Receptionist Management ──────────
+  const addReceptionist = useCallback(
+    (address: string) => sendTx((c) => c.addReceptionist(address)),
+    [sendTx]
+  );
+
+  const removeReceptionist = useCallback(
+    (address: string) => sendTx((c) => c.removeReceptionist(address)),
+    [sendTx]
+  );
+
+  // ── Owner Functions: Financial ────────────────────────
+  const withdrawCustom = useCallback(
+    (amountEth: string) => {
+      const amountWei = ethers.parseEther(amountEth);
+      return sendTx((c) => c.withdrawCustom(amountWei));
+    },
     [sendTx]
   );
 
@@ -136,18 +255,28 @@ export function useContract() {
 
   return {
     rooms,
+    receptionists,
     contractBalance,
     loading,
     txPending,
     error,
     setError,
+    isDemoMode,
+    isContractConfigured,
     isReady: isConnected && isCorrectNetwork,
     bookRoom,
     cancelReservation,
     payRemaining,
     confirmCheckIn,
     checkoutRoom,
-    setReceptionist,
+    addRoom,
+    updateRoomPrice,
+    updateRoomDetails,
+    toggleRoomActive,
+    forceResetRoom,
+    addReceptionist,
+    removeReceptionist,
+    withdrawCustom,
     withdrawFunds,
     refetch: fetchRooms,
   };

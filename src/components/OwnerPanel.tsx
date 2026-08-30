@@ -3,114 +3,248 @@
 import { useState } from "react";
 import { ethers } from "ethers";
 import { useContract } from "@/hooks/useContract";
+import AddRoomModal from "@/components/Modals/AddRoomModal";
 
 export default function OwnerPanel() {
-  const { contractBalance, setReceptionist, withdrawFunds, txPending } = useContract();
+  const {
+    contractBalance,
+    receptionists,
+    addReceptionist,
+    removeReceptionist,
+    withdrawCustom,
+    withdrawFunds,
+    addRoom,
+    txPending,
+  } = useContract();
+
+  const [isAddRoomOpen, setIsAddRoomOpen] = useState(false);
   const [receptionistInput, setReceptionistInput] = useState("");
+  const [customWithdrawEth, setCustomWithdrawEth] = useState("0.1");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [currentAction, setCurrentAction] = useState<"set" | "withdraw" | null>(null);
+  const [activeAction, setActiveAction] = useState<string | null>(null);
 
-  async function handle(type: "set" | "withdraw", fn: () => Promise<void>, successMsg: string) {
+  async function handle(key: string, fn: () => Promise<void>, successMsg: string) {
     setActionError(null);
     setActionSuccess(null);
-    setCurrentAction(type);
+    setActiveAction(key);
     try {
       await fn();
       setActionSuccess(successMsg);
-      if (type === "set") setReceptionistInput("");
     } catch (e: unknown) {
-      const msg = (e as { reason?: string; message?: string }).reason ?? (e as { message?: string }).message ?? "Transaction failed";
+      const msg =
+        (e as { reason?: string; message?: string }).reason ??
+        (e as { message?: string }).message ??
+        "Transaction failed";
       setActionError(msg.length > 150 ? msg.slice(0, 150) + "…" : msg);
     } finally {
-      setCurrentAction(null);
+      setActiveAction(null);
     }
   }
 
-  const isPending = (type: "set" | "withdraw") => txPending && currentAction === type;
-
-  const isValidAddress = receptionistInput.startsWith("0x") && receptionistInput.length === 42;
+  const isValidAddress =
+    receptionistInput.startsWith("0x") && receptionistInput.length === 42;
+  const balanceEth = ethers.formatEther(contractBalance);
 
   return (
-    <section className="bg-slate-800 border border-yellow-700/40 rounded-2xl p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">👑</span>
-        <div>
-          <h2 className="text-white font-bold text-lg">Owner Panel</h2>
-          <p className="text-slate-400 text-sm">Admin controls for hotel management</p>
+    <section className="bg-slate-900/90 border border-amber-500/30 rounded-3xl p-6 sm:p-8 space-y-8 shadow-2xl">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-2xl font-bold shadow-lg shadow-amber-500/10">
+            👑
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white tracking-tight">Hotel Owner Administration</h2>
+            <p className="text-xs text-slate-400">
+              Full control over finances, rooms, and front desk staff
+            </p>
+          </div>
         </div>
+
+        <button
+          onClick={() => setIsAddRoomOpen(true)}
+          className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-2xl shadow-lg shadow-amber-500/20 transition active:scale-95 flex items-center gap-2 self-start sm:self-auto"
+        >
+          ➕ Add New Room
+        </button>
       </div>
 
-      {/* Feedback */}
+      {/* Notifications */}
       {actionError && (
-        <div className="text-sm text-red-400 bg-red-900/30 rounded-xl px-4 py-3 break-words">
+        <div className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4">
           ❌ {actionError}
         </div>
       )}
       {actionSuccess && (
-        <div className="text-sm text-emerald-400 bg-emerald-900/30 rounded-xl px-4 py-3">
+        <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
           ✅ {actionSuccess}
         </div>
       )}
 
-      {/* Contract Balance */}
-      <div className="bg-slate-700/50 rounded-xl px-4 py-4 flex items-center justify-between">
-        <div>
-          <p className="text-slate-400 text-xs uppercase tracking-wide mb-0.5">Contract Balance</p>
-          <p className="text-white text-2xl font-bold">
-            {ethers.formatEther(contractBalance)}
-            <span className="text-slate-400 text-sm font-normal ml-1">ETH</span>
-          </p>
+      {/* Grid: Financials & Staff */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* 1. Financial Management */}
+        <div className="p-6 rounded-3xl bg-slate-950/60 border border-slate-800 space-y-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+              💰 Hotel Revenue & Treasury
+            </span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+              Sepolia Contract
+            </span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+            <span className="text-[11px] text-slate-400 uppercase tracking-wider block">Contract Balance</span>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-3xl font-extrabold text-white">{balanceEth}</span>
+              <span className="text-sm font-semibold text-amber-400">ETH</span>
+            </div>
+          </div>
+
+          {/* Withdraw Actions */}
+          <div className="space-y-3">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Custom Amount Withdraw
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.001"
+                  value={customWithdrawEth}
+                  onChange={(e) => setCustomWithdrawEth(e.target.value)}
+                  placeholder="e.g. 0.05"
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 text-white rounded-xl px-4 py-2.5 text-xs outline-none transition"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-semibold">
+                  ETH
+                </span>
+              </div>
+              <button
+                disabled={txPending || contractBalance === 0n || !customWithdrawEth}
+                onClick={() =>
+                  handle(
+                    "withdrawCustom",
+                    () => withdrawCustom(customWithdrawEth),
+                    `Successfully withdrew ${customWithdrawEth} ETH to owner wallet!`
+                  )
+                }
+                className="px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 disabled:opacity-40 rounded-xl text-xs font-bold transition whitespace-nowrap min-w-[90px]"
+              >
+                {activeAction === "withdrawCustom" ? "..." : "Withdraw"}
+              </button>
+            </div>
+
+            <button
+              disabled={txPending || contractBalance === 0n}
+              onClick={() =>
+                handle(
+                  "withdrawAll",
+                  withdrawFunds,
+                  "All accumulated hotel funds transferred to your wallet!"
+                )
+              }
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/10 transition flex items-center justify-center gap-2"
+            >
+              {activeAction === "withdrawAll" ? "Processing..." : `Withdraw 100% Full Balance (${balanceEth} ETH)`}
+            </button>
+          </div>
         </div>
-        <button
-          disabled={txPending || contractBalance === 0n}
-          onClick={() => handle("withdraw", withdrawFunds, "Funds withdrawn to your wallet!")}
-          className="px-5 py-2.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 font-bold text-sm rounded-xl transition-all active:scale-95 min-w-[120px] text-center"
-        >
-          {isPending("withdraw") ? <Spinner /> : "Withdraw All"}
-        </button>
+
+        {/* 2. Receptionist Staff Management */}
+        <div className="p-6 rounded-3xl bg-slate-950/60 border border-slate-800 space-y-5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+              🔑 Front Desk Receptionists
+            </span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
+              {receptionists.length} Staff Members
+            </span>
+          </div>
+
+          {/* Add Receptionist Input */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Grant Receptionist Access
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={receptionistInput}
+                onChange={(e) => setReceptionistInput(e.target.value)}
+                placeholder="0x... (Wallet Address)"
+                className="flex-1 bg-slate-900 border border-slate-700 focus:border-blue-400 text-white placeholder-slate-500 rounded-xl px-4 py-2 text-xs font-mono outline-none transition"
+              />
+              <button
+                disabled={txPending || !isValidAddress}
+                onClick={() =>
+                  handle(
+                    "addRecep",
+                    async () => {
+                      await addReceptionist(receptionistInput.trim());
+                      setReceptionistInput("");
+                    },
+                    `Granted receptionist role to ${receptionistInput.slice(0, 8)}…`
+                  )
+                }
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold transition whitespace-nowrap min-w-[70px]"
+              >
+                {activeAction === "addRecep" ? "..." : "Add"}
+              </button>
+            </div>
+          </div>
+
+          {/* Receptionists List */}
+          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <span className="text-[11px] text-slate-400 uppercase tracking-wider block">Active Staff List</span>
+            {receptionists.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2">No receptionist addresses added yet.</p>
+            ) : (
+              receptionists.map((addr) => (
+                <div
+                  key={addr}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 text-xs"
+                >
+                  <a
+                    href={`https://sepolia.etherscan.io/address/${addr}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300 font-mono hover:underline truncate max-w-[200px]"
+                  >
+                    {addr}
+                  </a>
+                  <button
+                    disabled={txPending}
+                    onClick={() =>
+                      handle(
+                        `remove-${addr}`,
+                        () => removeReceptionist(addr),
+                        `Revoked receptionist role from ${addr.slice(0, 6)}…`
+                      )
+                    }
+                    className="px-2 py-1 text-[11px] font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
       </div>
 
-      {/* Set Receptionist */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-yellow-400 uppercase tracking-wide">
-          Set Receptionist Address
-        </h3>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={receptionistInput}
-            onChange={(e) => setReceptionistInput(e.target.value)}
-            placeholder="0x..."
-            className="flex-1 bg-slate-700 border border-slate-600 focus:border-yellow-500 text-white placeholder-slate-500 rounded-xl px-4 py-2.5 text-sm outline-none transition-colors font-mono"
-          />
-          <button
-            disabled={txPending || !isValidAddress}
-            onClick={() =>
-              handle(
-                "set",
-                () => setReceptionist(receptionistInput),
-                `Receptionist set to ${receptionistInput.slice(0, 10)}…`
-              )
-            }
-            className="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 font-bold text-sm rounded-xl transition-all active:scale-95 min-w-[80px] text-center whitespace-nowrap"
-          >
-            {isPending("set") ? <Spinner /> : "Set"}
-          </button>
-        </div>
-        <p className="text-slate-500 text-xs">
-          The receptionist can confirm check-ins and check-outs.
-        </p>
-      </div>
+      {/* Add Room Modal */}
+      <AddRoomModal
+        isOpen={isAddRoomOpen}
+        onClose={() => setIsAddRoomOpen(false)}
+        onAdd={addRoom}
+        txPending={txPending}
+      />
     </section>
-  );
-}
-
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4 mx-auto" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-    </svg>
   );
 }

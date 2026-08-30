@@ -2,10 +2,9 @@
 
 import { useState, useEffect, createContext, useContext, useCallback, ReactNode } from "react";
 import { ethers } from "ethers";
-import { SEPOLIA_CHAIN_ID, SEPOLIA_CHAIN_ID_HEX, CONTRACT_ADDRESS } from "@/lib/constants";
+import { SEPOLIA_CHAIN_ID, SEPOLIA_CHAIN_ID_HEX, CONTRACT_ADDRESS, SEPOLIA_RPC_URL } from "@/lib/constants";
 import { PREMIUM_HOTEL_ABI } from "@/lib/abi";
 
-// ── Types ─────────────────────────────────────────────────
 export type UserRole = "owner" | "receptionist" | "customer";
 
 interface WalletState {
@@ -18,9 +17,9 @@ interface WalletState {
   connect: () => Promise<void>;
   disconnect: () => void;
   switchToSepolia: () => Promise<void>;
+  refreshRole: () => Promise<void>;
 }
 
-// ── Context ────────────────────────────────────────────────
 const WalletContext = createContext<WalletState>({} as WalletState);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
@@ -33,44 +32,63 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const isConnected = !!account;
   const isCorrectNetwork = chainId === SEPOLIA_CHAIN_ID;
 
-  // Detect role by comparing account against owner/receptionist
-  const detectRole = useCallback(async (addr: string, prov: ethers.BrowserProvider) => {
+  // Detect role from contract
+  const detectRole = useCallback(async (addr: string) => {
+    if (!addr || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
+      setRole("customer");
+      return;
+    }
     try {
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, prov);
-      const [ownerAddr, receptionistAddr] = await Promise.all([
-        contract.owner(),
-        contract.receptionist(),
-      ]);
-      if (addr.toLowerCase() === ownerAddr.toLowerCase()) return setRole("owner");
-      if (addr.toLowerCase() === receptionistAddr.toLowerCase()) return setRole("receptionist");
-    } catch {
-      // Contract not deployed yet — fallback to customer
+      const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, readProvider);
+      
+      const ownerAddr = await contract.owner();
+      if (addr.toLowerCase() === ownerAddr.toLowerCase()) {
+        setRole("owner");
+        return;
+      }
+
+      const isRecep = await contract.isReceptionist(addr);
+      if (isRecep) {
+        setRole("receptionist");
+        return;
+      }
+    } catch (e) {
+      console.warn("Role detection error:", e);
     }
     setRole("customer");
   }, []);
 
+  const refreshRole = useCallback(async () => {
+    if (account) {
+      await detectRole(account);
+    }
+  }, [account, detectRole]);
+
   const connect = useCallback(async () => {
     if (typeof window === "undefined" || !window.ethereum) {
-      alert("MetaMask not detected. Please install MetaMask and refresh.");
+      alert("MetaMask not detected. Please install MetaMask browser extension.");
       return;
     }
-    const prov = new ethers.BrowserProvider(window.ethereum);
-    const accounts: string[] = await prov.send("eth_requestAccounts", []);
-    if (!accounts.length) return;
+    try {
+      const prov = new ethers.BrowserProvider(window.ethereum);
+      const accounts: string[] = await prov.send("eth_requestAccounts", []);
+      if (!accounts.length) return;
 
-    const network = await prov.getNetwork();
-    const cId = Number(network.chainId);
-    setChainId(cId);
+      const network = await prov.getNetwork();
+      const cId = Number(network.chainId);
+      setChainId(cId);
 
-    const sign = await prov.getSigner();
-    const addr = accounts[0];
+      const sign = await prov.getSigner();
+      const addr = accounts[0];
 
-    setProvider(prov);
-    setSigner(sign);
-    setAccount(addr);
+      setProvider(prov);
+      setSigner(sign);
+      setAccount(addr);
 
-    if (cId === SEPOLIA_CHAIN_ID) {
-      await detectRole(addr, prov);
+      await detectRole(addr);
+    } catch (err) {
+      console.error("Connect wallet error:", err);
     }
   }, [detectRole]);
 
@@ -90,7 +108,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         params: [{ chainId: SEPOLIA_CHAIN_ID_HEX }],
       });
     } catch (err: unknown) {
-      // Chain not added yet — add it
       if ((err as { code: number }).code === 4902) {
         await window.ethereum.request({
           method: "wallet_addEthereumChain",
@@ -108,15 +125,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Listen for account / network changes
+  // Listen for account/network changes
   useEffect(() => {
     if (typeof window === "undefined" || !window.ethereum) return;
 
     const handleAccounts = (...args: unknown[]) => {
       const accounts = args[0] as string[];
-      if (!accounts.length) return disconnect();
-      setAccount(accounts[0]);
-      if (provider) detectRole(accounts[0], provider);
+      if (!accounts || !accounts.length) {
+        disconnect();
+      } else {
+        setAccount(accounts[0]);
+        detectRole(accounts[0]);
+      }
     };
 
     const handleChain = (...args: unknown[]) => {
@@ -131,11 +151,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       window.ethereum?.removeListener("accountsChanged", handleAccounts);
       window.ethereum?.removeListener("chainChanged", handleChain);
     };
-  }, [provider, detectRole, disconnect]);
+  }, [detectRole, disconnect]);
 
   return (
     <WalletContext.Provider
-      value={{ account, role, isConnected, isCorrectNetwork, provider, signer, connect, disconnect, switchToSepolia }}
+      value={{
+        account,
+        role,
+        isConnected,
+        isCorrectNetwork,
+        provider,
+        signer,
+        connect,
+        disconnect,
+        switchToSepolia,
+        refreshRole,
+      }}
     >
       {children}
     </WalletContext.Provider>
