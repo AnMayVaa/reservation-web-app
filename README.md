@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏨 PremiumHotel — Blockchain Reservation Web App
 
-## Getting Started
+A **Next.js 14** frontend for the `PremiumHotel` Solidity smart contract deployed on the **Ethereum Sepolia testnet**.  
+Payments are handled via **MetaMask**. Deploy instantly on **Vercel**.
 
-First, run the development server:
+---
+
+## ✨ Features
+
+- 🦊 **MetaMask integration** — connect, auto-switch to Sepolia
+- 🛏 **Room grid** — live status polling every 8 seconds
+- 💸 **2-step payment** — 50% deposit on booking + 50% before check-in
+- ⏰ **24h cancellation window** — countdown shown on room card
+- 👑 **Owner panel** — set receptionist, withdraw funds
+- 🔑 **Receptionist panel** — confirm check-in & checkout
+- 🌙 **Dark theme** — sleek slate/amber design
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone & install
+
+```bash
+git clone https://github.com/AnMayVaa/reservation-web-app.git
+cd reservation-web-app
+npm install
+```
+
+### 2. Deploy the smart contract
+
+1. Open [Remix IDE](https://remix.ethereum.org)
+2. Paste `PremiumHotel.sol` into Remix
+3. Compile with Solidity `^0.8.20`
+4. Connect MetaMask → select **Sepolia Testnet**
+5. Deploy → copy the **contract address**
+
+### 3. Configure environment
+
+```bash
+cp .env.local.example .env.local
+```
+
+Edit `.env.local`:
+```env
+NEXT_PUBLIC_CONTRACT_ADDRESS=0xYourDeployedContractAddress
+```
+
+### 4. Run locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 🌐 Deploy on Vercel
 
-## Learn More
+1. Push to GitHub ✅ (already done)
+2. Go to [vercel.com](https://vercel.com) → **New Project** → import `reservation-web-app`
+3. Add Environment Variable:
+   - Key: `NEXT_PUBLIC_CONTRACT_ADDRESS`
+   - Value: your Sepolia contract address
+4. Click **Deploy** 🚀
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🧩 Smart Contract Roles
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Role | What they can do |
+|------|-----------------|
+| **Customer** | Book room (50% deposit), pay remaining 50%, cancel |
+| **Receptionist** | Confirm check-in, confirm checkout |
+| **Owner** | Set receptionist address, withdraw all funds |
 
-## Deploy on Vercel
+Role is **auto-detected** by comparing the connected wallet address to the contract's `owner` and `receptionist` values.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠 Tech Stack
+
+| | |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Styling | Tailwind CSS v4 |
+| Blockchain | ethers.js v6 |
+| Wallet | MetaMask |
+| Network | Sepolia Testnet |
+| Deployment | Vercel |
+
+---
+
+## 📁 Project Structure
+
+```
+src/
+├── app/
+│   ├── layout.tsx       # Root layout + WalletProvider
+│   ├── page.tsx         # Home page
+│   └── globals.css
+├── components/
+│   ├── Navbar.tsx
+│   ├── RoomCard.tsx
+│   ├── RoomGrid.tsx
+│   ├── StatusBadge.tsx
+│   ├── WalletButton.tsx
+│   ├── OwnerPanel.tsx
+│   └── ReceptionistPanel.tsx
+├── hooks/
+│   ├── useWallet.ts     # MetaMask connection + role detection
+│   └── useContract.ts   # Contract reads/writes via ethers.js
+└── lib/
+    ├── abi.ts           # Contract ABI
+    └── constants.ts     # Chain ID, contract address, enums
+```

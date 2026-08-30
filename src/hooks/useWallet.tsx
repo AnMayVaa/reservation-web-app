@@ -112,13 +112,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined" || !window.ethereum) return;
 
-    const handleAccounts = (accounts: string[]) => {
+    const handleAccounts = (...args: unknown[]) => {
+      const accounts = args[0] as string[];
       if (!accounts.length) return disconnect();
       setAccount(accounts[0]);
       if (provider) detectRole(accounts[0], provider);
     };
 
-    const handleChain = (chainIdHex: string) => {
+    const handleChain = (...args: unknown[]) => {
+      const chainIdHex = args[0] as string;
       setChainId(parseInt(chainIdHex, 16));
     };
 
