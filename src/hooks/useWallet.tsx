@@ -40,7 +40,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+      let readProvider: ethers.Provider;
+      if (typeof window !== "undefined" && window.ethereum) {
+        readProvider = new ethers.BrowserProvider(window.ethereum);
+      } else {
+        readProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+      }
       const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, readProvider);
       
       const ownerAddr = await contract.owner();
@@ -97,7 +102,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const switchAccount = useCallback(async () => {
     if (typeof window === "undefined" || !window.ethereum) return;
     try {
-      // Request permissions opens the MetaMask account selection dialog
       await window.ethereum.request({
         method: "wallet_requestPermissions",
         params: [{ eth_accounts: {} }],
@@ -155,7 +159,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined" || !window.ethereum) return;
 
-    // Check if already authorized
     const checkInitialConnection = async () => {
       try {
         const prov = new ethers.BrowserProvider(window.ethereum!);
@@ -184,6 +187,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         try {
           const prov = new ethers.BrowserProvider(window.ethereum!);
           const sign = await prov.getSigner();
+          const network = await prov.getNetwork();
+          setChainId(Number(network.chainId));
           setProvider(prov);
           setSigner(sign);
           setAccount(accounts[0]);

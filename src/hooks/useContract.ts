@@ -90,7 +90,7 @@ function extractErrorMessage(e: unknown): string {
     "";
 
   if (raw.includes("Error: Only Owner can perform this action")) {
-    return "Error: Only the Hotel Owner wallet can perform this action.";
+    return "Error: Only the Hotel Owner wallet can perform this action. Switch to your deployer wallet in MetaMask.";
   }
   if (raw.includes("Address is already a receptionist")) {
     return "This address is already registered as a receptionist.";
@@ -104,8 +104,8 @@ function extractErrorMessage(e: unknown): string {
   if (raw.includes("insufficient funds")) {
     return "Insufficient Sepolia ETH balance in your wallet.";
   }
-  if (raw.includes("require(false)")) {
-    return "Transaction reverted: Sender is not the contract owner or permission denied.";
+  if (raw.includes("missing revert data") || raw.includes("require(false)") || raw.includes("CALL_EXCEPTION")) {
+    return "Permission Denied: Only the Contract Owner (deployer wallet) can execute this admin action. Please switch to your Owner wallet in MetaMask.";
   }
 
   return err.reason || err.shortMessage || err.message || "Transaction failed";
