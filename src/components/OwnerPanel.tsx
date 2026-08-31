@@ -48,8 +48,8 @@ export default function OwnerPanel() {
     }
   }
 
-  const isValidAddress =
-    receptionistInput.startsWith("0x") && receptionistInput.length === 42;
+  const trimmedInput = receptionistInput.trim();
+  const isValidAddress = /^0x[a-fA-F0-9]{40}$/.test(trimmedInput);
   const balanceEth = ethers.formatEther(contractBalance);
 
   return (
