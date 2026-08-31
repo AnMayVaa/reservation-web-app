@@ -73,10 +73,49 @@ async function getWorkingProvider(): Promise<ethers.Provider> {
   return new ethers.JsonRpcProvider(SEPOLIA_RPC_URLS[0]);
 }
 
+function extractErrorMessage(e: unknown): string {
+  if (!e) return "Transaction failed";
+  const err = e as {
+    reason?: string;
+    shortMessage?: string;
+    message?: string;
+    info?: { error?: { message?: string } };
+  };
+
+  const raw =
+    err.reason ||
+    err.shortMessage ||
+    err.info?.error?.message ||
+    err.message ||
+    "";
+
+  if (raw.includes("Error: Only Owner can perform this action")) {
+    return "Error: Only the Hotel Owner wallet can perform this action.";
+  }
+  if (raw.includes("Address is already a receptionist")) {
+    return "This address is already registered as a receptionist.";
+  }
+  if (raw.includes("Must pay exactly 50% deposit")) {
+    return "Must send exactly 50% of the room price as deposit.";
+  }
+  if (raw.includes("user rejected") || raw.includes("User rejected")) {
+    return "Transaction was rejected in MetaMask.";
+  }
+  if (raw.includes("insufficient funds")) {
+    return "Insufficient Sepolia ETH balance in your wallet.";
+  }
+  if (raw.includes("require(false)")) {
+    return "Transaction reverted: Sender is not the contract owner or permission denied.";
+  }
+
+  return err.reason || err.shortMessage || err.message || "Transaction failed";
+}
+
 export function useContract() {
   const { signer, isConnected, isCorrectNetwork, refreshRole } = useWallet();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [receptionists, setReceptionists] = useState<string[]>([]);
+  const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
   const [contractBalance, setContractBalance] = useState<bigint>(0n);
   const [loading, setLoading] = useState(true);
   const [txPending, setTxPending] = useState(false);
@@ -87,7 +126,7 @@ export function useContract() {
     CONTRACT_ADDRESS &&
     CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
-  // Fetch all rooms from contract
+  // Fetch all rooms and metadata from contract
   const fetchRooms = useCallback(async () => {
     if (!isContractConfigured) {
       setRooms(DEMO_ROOMS);
@@ -100,9 +139,10 @@ export function useContract() {
       const provider = await getWorkingProvider();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, provider);
       
-      const [rawRooms, recepsList, bal] = await Promise.all([
+      const [rawRooms, recepsList, owner, bal] = await Promise.all([
         contract.getAllRooms(),
         contract.getReceptionists().catch(() => []),
+        contract.owner().catch(() => null),
         provider.getBalance(CONTRACT_ADDRESS).catch(() => 0n),
       ]);
 
@@ -121,11 +161,11 @@ export function useContract() {
 
       setRooms(mapped);
       setReceptionists(recepsList);
+      setOwnerAddress(owner);
       setContractBalance(bal);
       setIsDemoMode(false);
     } catch (e) {
       console.warn("Error reading on-chain rooms:", e);
-      // If error occurs, keep previous rooms or fallback
       setRooms((prev) => (prev.length ? prev : DEMO_ROOMS));
     } finally {
       setLoading(false);
@@ -154,12 +194,9 @@ export function useContract() {
         await fetchRooms();
         await refreshRole();
       } catch (e: unknown) {
-        const msg =
-          (e as { reason?: string; message?: string }).reason ??
-          (e as { message?: string }).message ??
-          "Transaction failed";
+        const msg = extractErrorMessage(e);
         setError(msg);
-        throw e;
+        throw new Error(msg);
       } finally {
         setTxPending(false);
       }
@@ -261,6 +298,7 @@ export function useContract() {
   return {
     rooms,
     receptionists,
+    ownerAddress,
     contractBalance,
     loading,
     txPending,

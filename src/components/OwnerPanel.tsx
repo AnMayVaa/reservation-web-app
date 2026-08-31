@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { ethers } from "ethers";
 import { useContract } from "@/hooks/useContract";
+import { useWallet } from "@/hooks/useWallet";
 import AddRoomModal from "@/components/Modals/AddRoomModal";
 
 export default function OwnerPanel() {
   const {
     contractBalance,
     receptionists,
+    ownerAddress,
     addReceptionist,
     removeReceptionist,
     withdrawCustom,
@@ -17,12 +19,19 @@ export default function OwnerPanel() {
     txPending,
   } = useContract();
 
+  const { account, switchAccount } = useWallet();
+
   const [isAddRoomOpen, setIsAddRoomOpen] = useState(false);
   const [receptionistInput, setReceptionistInput] = useState("");
   const [customWithdrawEth, setCustomWithdrawEth] = useState("0.1");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+
+  const isCurrentWalletOwner =
+    account &&
+    ownerAddress &&
+    account.toLowerCase() === ownerAddress.toLowerCase();
 
   async function handle(key: string, fn: () => Promise<void>, successMsg: string) {
     setActionError(null);
@@ -32,10 +41,7 @@ export default function OwnerPanel() {
       await fn();
       setActionSuccess(successMsg);
     } catch (e: unknown) {
-      const msg =
-        (e as { reason?: string; message?: string }).reason ??
-        (e as { message?: string }).message ??
-        "Transaction failed";
+      const msg = (e as Error).message || "Transaction failed";
       setActionError(msg.length > 150 ? msg.slice(0, 150) + "…" : msg);
     } finally {
       setActiveAction(null);
@@ -62,13 +68,43 @@ export default function OwnerPanel() {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsAddRoomOpen(true)}
-          className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-2xl shadow-lg shadow-amber-500/20 transition active:scale-95 flex items-center gap-2 self-start sm:self-auto"
-        >
-          ➕ Add New Room
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {ownerAddress && (
+            <div className="hidden sm:block text-right">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Contract Owner</span>
+              <span className="text-xs font-mono text-amber-400">
+                {ownerAddress.slice(0, 6)}…{ownerAddress.slice(-4)}
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => setIsAddRoomOpen(true)}
+            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-2xl shadow-lg shadow-amber-500/20 transition active:scale-95 flex items-center gap-2 cursor-pointer"
+          >
+            ➕ Add New Room
+          </button>
+        </div>
       </div>
+
+      {/* Non-owner Warning Banner */}
+      {!isCurrentWalletOwner && ownerAddress && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-amber-300">
+              ⚠️ Connected Wallet is Not the Contract Owner
+            </p>
+            <p className="text-[11px] text-slate-400">
+              Connected: <code className="text-white font-mono">{account?.slice(0, 8)}…{account?.slice(-6)}</code>. Contract Owner: <code className="text-amber-400 font-mono">{ownerAddress}</code>.
+            </p>
+          </div>
+          <button
+            onClick={switchAccount}
+            className="px-3.5 py-1.5 bg-amber-500 text-slate-950 text-xs font-bold rounded-xl transition hover:bg-amber-400 whitespace-nowrap cursor-pointer"
+          >
+            Switch to Owner Wallet
+          </button>
+        </div>
+      )}
 
       {/* Notifications */}
       {actionError && (
@@ -133,7 +169,7 @@ export default function OwnerPanel() {
                     `Successfully withdrew ${customWithdrawEth} ETH to owner wallet!`
                   )
                 }
-                className="px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 disabled:opacity-40 rounded-xl text-xs font-bold transition whitespace-nowrap min-w-[90px]"
+                className="px-4 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 disabled:opacity-40 rounded-xl text-xs font-bold transition whitespace-nowrap min-w-[90px] cursor-pointer"
               >
                 {activeAction === "withdrawCustom" ? "..." : "Withdraw"}
               </button>
@@ -148,7 +184,7 @@ export default function OwnerPanel() {
                   "All accumulated hotel funds transferred to your wallet!"
                 )
               }
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/10 transition flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-500/10 transition flex items-center justify-center gap-2 cursor-pointer"
             >
               {activeAction === "withdrawAll" ? "Processing..." : `Withdraw 100% Full Balance (${balanceEth} ETH)`}
             </button>
@@ -191,7 +227,7 @@ export default function OwnerPanel() {
                     `Granted receptionist role to ${receptionistInput.slice(0, 8)}…`
                   )
                 }
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold transition whitespace-nowrap min-w-[70px]"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-xl text-xs font-bold transition whitespace-nowrap min-w-[70px] cursor-pointer"
               >
                 {activeAction === "addRecep" ? "..." : "Add"}
               </button>
@@ -226,7 +262,7 @@ export default function OwnerPanel() {
                         `Revoked receptionist role from ${addr.slice(0, 6)}…`
                       )
                     }
-                    className="px-2 py-1 text-[11px] font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                    className="px-2 py-1 text-[11px] font-semibold text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
                   >
                     Remove
                   </button>
