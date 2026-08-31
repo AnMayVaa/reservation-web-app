@@ -16,6 +16,7 @@ interface WalletState {
   signer: ethers.JsonRpcSigner | null;
   connect: () => Promise<void>;
   disconnect: () => void;
+  switchAccount: () => Promise<void>;
   switchToSepolia: () => Promise<void>;
   refreshRole: () => Promise<void>;
 }
@@ -92,6 +93,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [detectRole]);
 
+  // Trigger MetaMask's account switcher modal
+  const switchAccount = useCallback(async () => {
+    if (typeof window === "undefined" || !window.ethereum) return;
+    try {
+      // Request permissions opens the MetaMask account selection dialog
+      await window.ethereum.request({
+        method: "wallet_requestPermissions",
+        params: [{ eth_accounts: {} }],
+      });
+      const prov = new ethers.BrowserProvider(window.ethereum);
+      const accounts: string[] = await prov.send("eth_accounts", []);
+      if (accounts.length) {
+        const network = await prov.getNetwork();
+        setChainId(Number(network.chainId));
+        const sign = await prov.getSigner();
+        setProvider(prov);
+        setSigner(sign);
+        setAccount(accounts[0]);
+        await detectRole(accounts[0]);
+      }
+    } catch (err) {
+      console.warn("Switch account cancelled or failed:", err);
+    }
+  }, [detectRole]);
+
   const disconnect = useCallback(() => {
     setAccount(null);
     setRole("customer");
@@ -125,23 +151,56 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Listen for account/network changes
+  // Auto-connect check on page load & listen for events
   useEffect(() => {
     if (typeof window === "undefined" || !window.ethereum) return;
 
-    const handleAccounts = (...args: unknown[]) => {
+    // Check if already authorized
+    const checkInitialConnection = async () => {
+      try {
+        const prov = new ethers.BrowserProvider(window.ethereum!);
+        const accounts: string[] = await prov.send("eth_accounts", []);
+        if (accounts.length) {
+          const network = await prov.getNetwork();
+          setChainId(Number(network.chainId));
+          const sign = await prov.getSigner();
+          setProvider(prov);
+          setSigner(sign);
+          setAccount(accounts[0]);
+          await detectRole(accounts[0]);
+        }
+      } catch (e) {
+        console.warn("Initial connection check:", e);
+      }
+    };
+
+    checkInitialConnection();
+
+    const handleAccounts = async (...args: unknown[]) => {
       const accounts = args[0] as string[];
       if (!accounts || !accounts.length) {
         disconnect();
       } else {
-        setAccount(accounts[0]);
-        detectRole(accounts[0]);
+        try {
+          const prov = new ethers.BrowserProvider(window.ethereum!);
+          const sign = await prov.getSigner();
+          setProvider(prov);
+          setSigner(sign);
+          setAccount(accounts[0]);
+          await detectRole(accounts[0]);
+        } catch (e) {
+          console.warn("Account change error:", e);
+          setAccount(accounts[0]);
+          detectRole(accounts[0]);
+        }
       }
     };
 
-    const handleChain = (...args: unknown[]) => {
-      const chainIdHex = args[0] as string;
-      setChainId(parseInt(chainIdHex, 16));
+    const handleChain = (chainIdHex: unknown) => {
+      const hex = typeof chainIdHex === "string" ? chainIdHex : (chainIdHex as string[])?.[0];
+      if (hex) {
+        setChainId(parseInt(hex, 16));
+      }
     };
 
     window.ethereum.on("accountsChanged", handleAccounts);
@@ -164,6 +223,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         signer,
         connect,
         disconnect,
+        switchAccount,
         switchToSepolia,
         refreshRole,
       }}

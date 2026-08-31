@@ -1,10 +1,34 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { useWallet } from "@/hooks/useWallet";
 
 export default function WalletButton() {
-  const { account, role, isConnected, isCorrectNetwork, connect, disconnect, switchToSepolia } =
-    useWallet();
+  const {
+    account,
+    role,
+    isConnected,
+    isCorrectNetwork,
+    connect,
+    disconnect,
+    switchAccount,
+    switchToSepolia,
+  } = useWallet();
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const roleConfig: Record<string, { label: string; bg: string }> = {
     owner: { label: "👑 Owner", bg: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
@@ -40,19 +64,96 @@ export default function WalletButton() {
 
   const currentRole = roleConfig[role] || roleConfig.customer;
 
+  const copyAddress = () => {
+    if (account) {
+      navigator.clipboard.writeText(account);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border ${currentRole.bg}`}>
-        {currentRole.label}
-      </span>
-      <button
-        className="flex items-center gap-2 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-800 text-slate-200 text-xs rounded-2xl border border-slate-700/80 transition-all cursor-pointer"
-        title="Click to disconnect"
-        onClick={disconnect}
-      >
-        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-        <span className="font-mono">{account!.slice(0, 6)}…{account!.slice(-4)}</span>
-      </button>
+    <div className="relative" ref={dropdownRef}>
+      <div className="flex items-center gap-2">
+        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border ${currentRole.bg}`}>
+          {currentRole.label}
+        </span>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs rounded-2xl border border-slate-700/80 transition-all cursor-pointer shadow-sm"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span className="font-mono">{account!.slice(0, 6)}…{account!.slice(-4)}</span>
+          <svg
+            className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Wallet Management Dropdown */}
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-3 space-y-3 z-50 animate-fadeIn">
+          {/* Account Details */}
+          <div className="p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-1">
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span>Connected Account</span>
+              <span className="text-[10px] font-bold text-amber-400 uppercase">{role}</span>
+            </div>
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-mono text-xs text-white truncate max-w-[160px]">
+                {account}
+              </span>
+              <button
+                onClick={copyAddress}
+                className="text-[11px] text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition"
+                title="Copy Address"
+              >
+                {copied ? "✓ Copied" : "📋"}
+              </button>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-1.5 pt-1 border-t border-slate-800">
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                switchAccount();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500/10 hover:text-amber-300 rounded-xl transition cursor-pointer text-left"
+            >
+              <span className="text-sm">🔄</span>
+              <span>Switch / Change Wallet</span>
+            </button>
+
+            <a
+              href={`https://sepolia.etherscan.io/address/${account}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl transition text-left"
+            >
+              <span className="text-sm">↗️</span>
+              <span>View on Etherscan</span>
+            </a>
+
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                disconnect();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 rounded-xl transition cursor-pointer text-left"
+            >
+              <span className="text-sm">🚪</span>
+              <span>Disconnect Wallet</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
