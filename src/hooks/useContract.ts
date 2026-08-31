@@ -178,17 +178,24 @@ export function useContract() {
     return () => clearInterval(interval);
   }, [fetchRooms]);
 
-  // Execute transaction helper
+  // Execute transaction helper — dynamically requests fresh active signer
   const sendTx = useCallback(
     async (fn: (contract: ethers.Contract) => Promise<ethers.ContractTransactionResponse>) => {
-      if (!signer) throw new Error("Wallet not connected. Please connect MetaMask.");
+      if (typeof window === "undefined" || !window.ethereum) {
+        throw new Error("MetaMask not detected. Please install MetaMask.");
+      }
       if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
         throw new Error("Contract address is not configured yet. Please deploy the contract and set the address.");
       }
       setTxPending(true);
       setError(null);
       try {
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, signer);
+        const liveProvider = new ethers.BrowserProvider(window.ethereum);
+        const liveSigner = await liveProvider.getSigner();
+        const activeAddr = await liveSigner.getAddress();
+        console.log("Executing transaction with active wallet:", activeAddr);
+
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, liveSigner);
         const tx = await fn(contract);
         await tx.wait();
         await fetchRooms();
@@ -201,7 +208,7 @@ export function useContract() {
         setTxPending(false);
       }
     },
-    [signer, fetchRooms, refreshRole]
+    [fetchRooms, refreshRole]
   );
 
   // ── Customer Functions ────────────────────────────────
