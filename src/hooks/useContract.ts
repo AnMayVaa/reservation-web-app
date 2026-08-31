@@ -18,7 +18,7 @@ export interface Room {
   isActive: boolean;
 }
 
-// Fallback demo rooms if contract not deployed yet
+// Fallback demo rooms
 const DEMO_ROOMS: Room[] = [
   {
     id: 1n,
@@ -55,11 +55,16 @@ const DEMO_ROOMS: Room[] = [
   },
 ];
 
-async function getWorkingProvider(): Promise<ethers.JsonRpcProvider> {
+async function getWorkingProvider(): Promise<ethers.Provider> {
+  if (typeof window !== "undefined" && window.ethereum) {
+    try {
+      const p = new ethers.BrowserProvider(window.ethereum);
+      return p;
+    } catch {}
+  }
   for (const url of SEPOLIA_RPC_URLS) {
     try {
       const p = new ethers.JsonRpcProvider(url);
-      await p.getBlockNumber();
       return p;
     } catch {
       continue;
@@ -82,7 +87,7 @@ export function useContract() {
     CONTRACT_ADDRESS &&
     CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
-  // Fetch all rooms from contract or use demo fallback
+  // Fetch all rooms from contract
   const fetchRooms = useCallback(async () => {
     if (!isContractConfigured) {
       setRooms(DEMO_ROOMS);
@@ -119,9 +124,9 @@ export function useContract() {
       setContractBalance(bal);
       setIsDemoMode(false);
     } catch (e) {
-      console.warn("Error fetching on-chain data, falling back to demo:", e);
-      setRooms(DEMO_ROOMS);
-      setIsDemoMode(true);
+      console.warn("Error reading on-chain rooms:", e);
+      // If error occurs, keep previous rooms or fallback
+      setRooms((prev) => (prev.length ? prev : DEMO_ROOMS));
     } finally {
       setLoading(false);
     }
@@ -137,8 +142,8 @@ export function useContract() {
   const sendTx = useCallback(
     async (fn: (contract: ethers.Contract) => Promise<ethers.ContractTransactionResponse>) => {
       if (!signer) throw new Error("Wallet not connected. Please connect MetaMask.");
-      if (isDemoMode) {
-        throw new Error("Contract address is not configured yet. Please deploy the contract and add the address.");
+      if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
+        throw new Error("Contract address is not configured yet. Please deploy the contract and set the address.");
       }
       setTxPending(true);
       setError(null);
@@ -159,7 +164,7 @@ export function useContract() {
         setTxPending(false);
       }
     },
-    [signer, isDemoMode, fetchRooms, refreshRole]
+    [signer, fetchRooms, refreshRole]
   );
 
   // ── Customer Functions ────────────────────────────────

@@ -1,11 +1,17 @@
 // ============================================================
 // Contract Configuration
-// Paste your deployed contract address here or set in .env.local
+// Deployed on Ethereum Sepolia Testnet
 // ============================================================
 
-export const CONTRACT_ADDRESS =
-  (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`) ||
-  "0x435e26dfB8faeB30fdDEf888aeba681E130D8014";
+const envAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+
+export const CONTRACT_ADDRESS: `0x${string}` = (
+  envAddress &&
+  envAddress !== "0x0000000000000000000000000000000000000000" &&
+  envAddress.startsWith("0x")
+    ? envAddress
+    : "0x435e26dfB8faeB30fdDEf888aeba681E130D8014"
+) as `0x${string}`;
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";
