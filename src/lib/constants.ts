@@ -10,7 +10,7 @@ export const CONTRACT_ADDRESS: `0x${string}` = (
   envAddress !== "0x0000000000000000000000000000000000000000" &&
   envAddress.startsWith("0x")
     ? envAddress
-    : "0x435e26dfB8faeB30fdDEf888aeba681E130D8014"
+    : "0x8258a0822010934418A9790A8F3f3630B395A5b9"
 ) as `0x${string}`;
 
 export const SEPOLIA_CHAIN_ID = 11155111;
