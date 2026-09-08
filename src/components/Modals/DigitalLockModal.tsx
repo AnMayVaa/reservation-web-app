@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ethers } from "ethers";
 import { Room } from "@/hooks/useContract";
 import { useWallet } from "@/hooks/useWallet";
@@ -9,7 +9,7 @@ interface DigitalLockModalProps {
   room: Room | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirmCheckIn?: () => void;
+  onConfirmCheckIn?: () => Promise<void>;
 }
 
 export default function DigitalLockModal({
@@ -24,12 +24,21 @@ export default function DigitalLockModal({
   const [currentNonce, setCurrentNonce] = useState("849201");
   const [currentTimestamp, setCurrentTimestamp] = useState(Math.floor(Date.now() / 1000));
   
+  // Keep live references to active nonce & timestamp for expiry checking
+  const activeNonceRef = useRef(currentNonce);
+  const activeTimestampRef = useRef(currentTimestamp);
+  useEffect(() => {
+    activeNonceRef.current = currentNonce;
+    activeTimestampRef.current = currentTimestamp;
+  }, [currentNonce, currentTimestamp]);
+
   const [signing, setSigning] = useState(false);
-  const [unlockStatus, setUnlockStatus] = useState<"idle" | "success" | "spoof_failed" | "error">("idle");
+  const [syncingOnChain, setSyncingOnChain] = useState(false);
+  const [unlockStatus, setUnlockStatus] = useState<"idle" | "success" | "spoof_failed" | "error" | "expired">("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [recoveredSigner, setRecoveredSigner] = useState<string | null>(null);
 
-  // TOTP 30-second rolling window simulation
+  // TOTP 30-second rolling window
   useEffect(() => {
     if (!isOpen) return;
     const interval = setInterval(() => {
@@ -39,7 +48,7 @@ export default function DigitalLockModal({
       setCurrentTimestamp(now);
 
       if (secondsLeft === 30 || secondsLeft === 1) {
-        // Generate pseudo-random 6-digit nonce for this window
+        // Rotate pseudo-random 6-digit nonce for this 30s window
         const newNonce = Math.floor(100000 + Math.random() * 900000).toString();
         setCurrentNonce(newNonce);
       }
@@ -57,12 +66,43 @@ export default function DigitalLockModal({
     }
   }, [isOpen]);
 
-  // Genuine MetaMask signature unlock (EIP-191)
+  // Genuine MetaMask signature unlock (EIP-191) with schedule and nonce-expiry checks
   const handleRealUnlock = useCallback(async () => {
     if (!room || !account) return;
     setSigning(true);
     setUnlockStatus("idle");
     setStatusMessage("");
+
+    // 1. Schedule Validation: Cannot check in / unlock before scheduled check-in time!
+    const nowSec = Math.floor(Date.now() / 1000);
+    const checkInSec = Number(room.checkInTime);
+    const checkOutSec = Number(room.checkOutTime);
+
+    if (checkInSec > 0 && nowSec < checkInSec) {
+      const diffSec = checkInSec - nowSec;
+      const diffMins = Math.ceil(diffSec / 60);
+      const checkInStr = new Date(checkInSec * 1000).toLocaleString();
+      setUnlockStatus("error");
+      setStatusMessage(
+        `⏳ CANNOT UNLOCK BEFORE SCHEDULE: Your reservation begins on ${checkInStr}. The digital door lock will remain locked until your scheduled check-in time (in ~${diffMins} minutes).`
+      );
+      setSigning(false);
+      return;
+    }
+
+    if (checkOutSec > 0 && nowSec > checkOutSec) {
+      const checkOutStr = new Date(checkOutSec * 1000).toLocaleString();
+      setUnlockStatus("error");
+      setStatusMessage(
+        `⌛ STAY EXPIRED: Your reservation ended on ${checkOutStr}. Key access has been automatically revoked.`
+      );
+      setSigning(false);
+      return;
+    }
+
+    // Capture the nonce & timestamp presented to user when clicking sign
+    const challengeNonce = currentNonce;
+    const challengeTimestamp = currentTimestamp;
 
     try {
       if (typeof window === "undefined" || !window.ethereum) {
@@ -71,21 +111,33 @@ export default function DigitalLockModal({
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
 
-      const challengeMessage = `[SmartHotel IoT Lock]\nRoom ID: ${room.id.toString()}\nNonce: ${currentNonce}\nTimestamp: ${currentTimestamp}\nAction: UNLOCK_DOOR`;
+      const challengeMessage = `[SmartHotel IoT Lock]\nRoom ID: ${room.id.toString()}\nNonce: ${challengeNonce}\nTimestamp: ${challengeTimestamp}\nAction: UNLOCK_DOOR`;
       
       // Guest signs with their private key (0 Gas)
       const signature = await signer.signMessage(challengeMessage);
 
-      // Lock verifies signature off-chain using ecrecover / verifyMessage (0 Gas)
+      // 2. Dynamic Nonce Expiration Check:
+      // If the user took longer than 30 seconds or the active nonce changed during signing
+      const finishedNowSec = Math.floor(Date.now() / 1000);
+      const isExpiredWindow =
+        finishedNowSec - challengeTimestamp > 30 ||
+        challengeNonce !== activeNonceRef.current;
+
+      if (isExpiredWindow) {
+        setUnlockStatus("expired");
+        setStatusMessage(
+          `⏱️ DYNAMIC NONCE EXPIRED (>30s): You signed challenge with Nonce [${challengeNonce}], but the lock rotated to Nonce [${activeNonceRef.current}]. The lock rejected this signature to prevent replay attacks! Please sign the live active nonce.`
+        );
+        return;
+      }
+
+      // 3. Cryptographic Verification: recover public address
       const recovered = ethers.verifyMessage(challengeMessage, signature);
       setRecoveredSigner(recovered);
 
       if (recovered.toLowerCase() === room.occupant.toLowerCase()) {
         setUnlockStatus("success");
-        setStatusMessage("✅ ACCESS GRANTED! Door servo motor activated. Welcome to your room!");
-        if (onConfirmCheckIn && room.status === 2) {
-          onConfirmCheckIn();
-        }
+        setStatusMessage("✅ ACCESS GRANTED! Signature verified within active 30s window. Door servo motor activated!");
       } else {
         setUnlockStatus("error");
         setStatusMessage(
@@ -98,7 +150,21 @@ export default function DigitalLockModal({
     } finally {
       setSigning(false);
     }
-  }, [room, account, currentNonce, currentTimestamp, onConfirmCheckIn]);
+  }, [room, account, currentNonce, currentTimestamp]);
+
+  // Optional on-chain check-in trigger
+  const handleOnChainSync = useCallback(async () => {
+    if (!onConfirmCheckIn) return;
+    setSyncingOnChain(true);
+    try {
+      await onConfirmCheckIn();
+      setStatusMessage("🎉 On-chain status updated to 'Checked In' on Sepolia!");
+    } catch (e: unknown) {
+      setStatusMessage(`Transaction error: ${(e as Error).message || "Failed to update on-chain"}`);
+    } finally {
+      setSyncingOnChain(false);
+    }
+  }, [onConfirmCheckIn]);
 
   // Teacher Demonstration: Simulate Attacker who only knows occupant's public address
   const handleSpoofAttackSimulation = useCallback(() => {
@@ -122,7 +188,7 @@ export default function DigitalLockModal({
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-slate-400 hover:text-white text-xl p-2 rounded-xl hover:bg-slate-800 transition"
+          className="absolute top-5 right-5 text-slate-400 hover:text-white text-xl p-2 rounded-xl hover:bg-slate-800 transition cursor-pointer"
         >
           ✕
         </button>
@@ -141,6 +207,24 @@ export default function DigitalLockModal({
             </p>
           </div>
         </div>
+
+        {/* Scheduled Stay Info Box */}
+        {room.checkInTime > 0n && (
+          <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
+            <div className="flex justify-between text-slate-400">
+              <span>📅 Scheduled Stay:</span>
+              <span className="font-semibold text-white">
+                {new Date(Number(room.checkInTime) * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                {" → "}
+                {new Date(Number(room.checkOutTime) * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+              </span>
+            </div>
+            <div className="flex justify-between text-[11px] text-slate-500">
+              <span>Door Access Window:</span>
+              <span className="text-emerald-400 font-semibold">Active only during stay dates</span>
+            </div>
+          </div>
+        )}
 
         {/* Dynamic Rolling TOTP Nonce Box */}
         <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
@@ -183,8 +267,8 @@ export default function DigitalLockModal({
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Verification Gas Fee:</span>
-            <span className="text-emerald-400 font-bold">0 ETH (Off-Chain Cryptographic Proof)</span>
+            <span className="text-slate-500">Unlock Fee:</span>
+            <span className="text-emerald-400 font-bold">0 ETH (Instant Off-Chain Proof)</span>
           </div>
         </div>
 
@@ -194,6 +278,8 @@ export default function DigitalLockModal({
             className={`p-4 rounded-2xl text-xs leading-relaxed border ${
               unlockStatus === "success"
                 ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                : unlockStatus === "expired"
+                ? "bg-amber-500/10 text-amber-300 border-amber-500/30"
                 : "bg-rose-500/10 text-rose-300 border-rose-500/30"
             }`}
           >
@@ -206,6 +292,22 @@ export default function DigitalLockModal({
           </div>
         )}
 
+        {/* Optional On-Chain Status Update after successful unlock */}
+        {unlockStatus === "success" && room.status === 2 && onConfirmCheckIn && (
+          <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-2 text-xs">
+            <p className="text-blue-300">
+              💡 Door is unlocked! Would you like to record your check-in on the Sepolia blockchain ledger?
+            </p>
+            <button
+              disabled={syncingOnChain}
+              onClick={handleOnChainSync}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-xl transition cursor-pointer"
+            >
+              {syncingOnChain ? "Submitting on-chain..." : "📝 Record Check-In on Blockchain (Sepolia Tx)"}
+            </button>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="space-y-3">
           <button
@@ -213,7 +315,7 @@ export default function DigitalLockModal({
             onClick={handleRealUnlock}
             className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-2xl shadow-lg shadow-purple-500/25 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
           >
-            {signing ? "Verifying Cryptographic Signature..." : "🔐 Sign with MetaMask & Unlock Door"}
+            {signing ? "Waiting for MetaMask signature..." : "🔐 Sign Challenge with MetaMask & Unlock Door"}
           </button>
 
           {/* Teacher Test Button: Address Spoofing Attack */}
@@ -227,7 +329,7 @@ export default function DigitalLockModal({
         </div>
 
         <p className="text-[11px] text-slate-500 text-center leading-tight">
-          💡 <strong>Teacher Note:</strong> Anyone can see your public address on Etherscan, but only you hold the private key needed to create a valid cryptographic signature for the door lock.
+          💡 <strong>Teacher Note:</strong> Challenge rotates every 30 seconds. Signatures signed late or with expired nonces are rejected. Address spoofers fail because they lack the occupant&apos;s private key.
         </p>
       </div>
     </div>

@@ -292,12 +292,34 @@ export default function RoomCard({ room, onEdit }: RoomCardProps) {
           {/* Paid Waiting For Key or Checked In -> Show IoT Digital Key & Unlock */}
           {(room.status === RoomStatus.PaidWaitingForKey || room.status === RoomStatus.CheckedIn) && isMyRoom && (
             <div className="space-y-2">
+              {/* Upcoming stay warning if before check-in time */}
+              {room.checkInTime > 0n && Math.floor(Date.now() / 1000) < Number(room.checkInTime) && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center justify-between">
+                  <span>⏳ Scheduled Stay:</span>
+                  <span className="font-semibold">
+                    {new Date(Number(room.checkInTime) * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                  </span>
+                </div>
+              )}
+
               <button
                 onClick={() => setIsDigitalLockOpen(true)}
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm shadow-lg shadow-purple-500/25 transition active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer animate-pulse"
               >
-                🚪 Open Digital Key & Unlock Door
+                🚪 Open Digital Key & Unlock Door (0 Gas)
               </button>
+
+              {/* Optional On-Chain Check-In Button for users who want to update state on Sepolia */}
+              {room.status === RoomStatus.PaidWaitingForKey && (
+                <button
+                  disabled={!canInteract || isPending}
+                  onClick={() => handle(() => confirmCheckIn(room.id))}
+                  className="w-full py-2 rounded-2xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {isPending ? <Spinner /> : "🛎️ Record Check-In on Blockchain (Sepolia Tx)"}
+                </button>
+              )}
+
               <button
                 disabled={!canInteract || isPending}
                 onClick={() => handle(() => checkoutRoom(room.id))}
