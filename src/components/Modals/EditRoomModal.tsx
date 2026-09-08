@@ -31,7 +31,7 @@ export default function EditRoomModal({
     if (room) {
       setName(room.name);
       setRoomType(room.roomType);
-      setPriceEth(ethers.formatEther(room.price));
+      setPriceEth(ethers.formatEther(room.pricePerNight));
       setImageUrl(room.imageUrl);
     }
   }, [room]);
@@ -45,7 +45,7 @@ export default function EditRoomModal({
     setError(null);
     try {
       // If price changed and room is available
-      const currentPriceEth = ethers.formatEther(room!.price);
+      const currentPriceEth = ethers.formatEther(room!.pricePerNight);
       if (priceEth !== currentPriceEth && isAvailable) {
         await onUpdatePrice(room!.id, priceEth);
       }

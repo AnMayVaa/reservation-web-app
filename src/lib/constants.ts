@@ -1,10 +1,10 @@
 // ============================================================
 // Contract Configuration
-// Deployed on Ethereum Sepolia Testnet (PremiumHotel v2)
+// Deployed on Ethereum Sepolia Testnet (PremiumHotel v3)
 // ============================================================
 
 export const CONTRACT_ADDRESS: `0x${string}` =
-  "0x8258a0822010934418A9790A8F3f3630B395A5b9";
+  "0x8Ed901d11056faFA8C728FE93E2a0d8884Ec0f02";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";
@@ -29,9 +29,9 @@ export enum RoomStatus {
 
 export const ROOM_STATUS_LABELS: Record<RoomStatus, string> = {
   [RoomStatus.Available]: "Available",
-  [RoomStatus.Booked]: "Booked (50% Paid)",
-  [RoomStatus.PaidWaitingForKey]: "Paid (Awaiting Key)",
-  [RoomStatus.CheckedIn]: "Checked In",
+  [RoomStatus.Booked]: "Booked (50% Deposit Paid)",
+  [RoomStatus.PaidWaitingForKey]: "Paid (Awaiting Key / Unlock)",
+  [RoomStatus.CheckedIn]: "Checked In (Key Active)",
 };
 
 export const ROOM_STATUS_COLORS: Record<RoomStatus, string> = {

@@ -103,7 +103,7 @@ export default function AddRoomModal({ isOpen, onClose, onAdd, txPending }: AddR
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                Price (ETH)
+                Price / Night (ETH)
               </label>
               <input
                 type="number"

@@ -26,10 +26,13 @@ import type {
 export declare namespace PremiumHotel {
   export type RoomStruct = {
     id: BigNumberish;
-    price: BigNumberish;
+    pricePerNight: BigNumberish;
+    totalPrice: BigNumberish;
     status: BigNumberish;
     occupant: AddressLike;
     bookingTime: BigNumberish;
+    checkInTime: BigNumberish;
+    checkOutTime: BigNumberish;
     name: string;
     roomType: string;
     imageUrl: string;
@@ -38,20 +41,26 @@ export declare namespace PremiumHotel {
 
   export type RoomStructOutput = [
     id: bigint,
-    price: bigint,
+    pricePerNight: bigint,
+    totalPrice: bigint,
     status: bigint,
     occupant: string,
     bookingTime: bigint,
+    checkInTime: bigint,
+    checkOutTime: bigint,
     name: string,
     roomType: string,
     imageUrl: string,
     isActive: boolean
   ] & {
     id: bigint;
-    price: bigint;
+    pricePerNight: bigint;
+    totalPrice: bigint;
     status: bigint;
     occupant: string;
     bookingTime: bigint;
+    checkInTime: bigint;
+    checkOutTime: bigint;
     name: string;
     roomType: string;
     imageUrl: string;
@@ -68,6 +77,7 @@ export interface PremiumHotelInterface extends Interface {
       | "cancelReservation"
       | "checkoutRoom"
       | "confirmCheckIn"
+      | "expireBooking"
       | "forceResetRoom"
       | "getAllRooms"
       | "getReceptionists"
@@ -88,6 +98,7 @@ export interface PremiumHotelInterface extends Interface {
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "BookingExpired"
       | "CheckedIn"
       | "CheckedOut"
       | "FundsWithdrawn"
@@ -111,7 +122,7 @@ export interface PremiumHotelInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "bookRoom",
-    values: [BigNumberish]
+    values: [BigNumberish, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "cancelReservation",
@@ -123,6 +134,10 @@ export interface PremiumHotelInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "confirmCheckIn",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "expireBooking",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -203,6 +218,10 @@ export interface PremiumHotelInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "expireBooking",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "forceResetRoom",
     data: BytesLike
   ): Result;
@@ -259,20 +278,33 @@ export interface PremiumHotelInterface extends Interface {
   ): Result;
 }
 
+export namespace BookingExpiredEvent {
+  export type InputTuple = [roomId: BigNumberish, resetBy: AddressLike];
+  export type OutputTuple = [roomId: bigint, resetBy: string];
+  export interface OutputObject {
+    roomId: bigint;
+    resetBy: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace CheckedInEvent {
   export type InputTuple = [
     roomId: BigNumberish,
-    receptionist: AddressLike,
+    operator: AddressLike,
     occupant: AddressLike
   ];
   export type OutputTuple = [
     roomId: bigint,
-    receptionist: string,
+    operator: string,
     occupant: string
   ];
   export interface OutputObject {
     roomId: bigint;
-    receptionist: string;
+    operator: string;
     occupant: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
@@ -282,11 +314,11 @@ export namespace CheckedInEvent {
 }
 
 export namespace CheckedOutEvent {
-  export type InputTuple = [roomId: BigNumberish, receptionist: AddressLike];
-  export type OutputTuple = [roomId: bigint, receptionist: string];
+  export type InputTuple = [roomId: BigNumberish, operator: AddressLike];
+  export type OutputTuple = [roomId: bigint, operator: string];
   export interface OutputObject {
     roomId: bigint;
-    receptionist: string;
+    operator: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -388,19 +420,19 @@ export namespace RoomAddedEvent {
   export type InputTuple = [
     roomId: BigNumberish,
     name: string,
-    price: BigNumberish,
+    pricePerNight: BigNumberish,
     roomType: string
   ];
   export type OutputTuple = [
     roomId: bigint,
     name: string,
-    price: bigint,
+    pricePerNight: bigint,
     roomType: string
   ];
   export interface OutputObject {
     roomId: bigint;
     name: string;
-    price: bigint;
+    pricePerNight: bigint;
     roomType: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
@@ -413,13 +445,26 @@ export namespace RoomBookedEvent {
   export type InputTuple = [
     roomId: BigNumberish,
     occupant: AddressLike,
-    deposit: BigNumberish
+    deposit: BigNumberish,
+    checkInTime: BigNumberish,
+    checkOutTime: BigNumberish,
+    nights: BigNumberish
   ];
-  export type OutputTuple = [roomId: bigint, occupant: string, deposit: bigint];
+  export type OutputTuple = [
+    roomId: bigint,
+    occupant: string,
+    deposit: bigint,
+    checkInTime: bigint,
+    checkOutTime: bigint,
+    nights: bigint
+  ];
   export interface OutputObject {
     roomId: bigint;
     occupant: string;
     deposit: bigint;
+    checkInTime: bigint;
+    checkOutTime: bigint;
+    nights: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -452,21 +497,21 @@ export namespace RoomPriceUpdatedEvent {
 export namespace RoomUpdatedEvent {
   export type InputTuple = [
     roomId: BigNumberish,
-    price: BigNumberish,
+    pricePerNight: BigNumberish,
     name: string,
     roomType: string,
     isActive: boolean
   ];
   export type OutputTuple = [
     roomId: bigint,
-    price: bigint,
+    pricePerNight: bigint,
     name: string,
     roomType: string,
     isActive: boolean
   ];
   export interface OutputObject {
     roomId: bigint;
-    price: bigint;
+    pricePerNight: bigint;
     name: string;
     roomType: string;
     isActive: boolean;
@@ -527,12 +572,25 @@ export interface PremiumHotel extends BaseContract {
   >;
 
   addRoom: TypedContractMethod<
-    [_price: BigNumberish, _name: string, _roomType: string, _imageUrl: string],
+    [
+      _pricePerNight: BigNumberish,
+      _name: string,
+      _roomType: string,
+      _imageUrl: string
+    ],
     [void],
     "nonpayable"
   >;
 
-  bookRoom: TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
+  bookRoom: TypedContractMethod<
+    [
+      _roomId: BigNumberish,
+      _checkInTime: BigNumberish,
+      _checkOutTime: BigNumberish
+    ],
+    [void],
+    "payable"
+  >;
 
   cancelReservation: TypedContractMethod<
     [_roomId: BigNumberish],
@@ -547,6 +605,12 @@ export interface PremiumHotel extends BaseContract {
   >;
 
   confirmCheckIn: TypedContractMethod<
+    [_roomId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  expireBooking: TypedContractMethod<
     [_roomId: BigNumberish],
     [void],
     "nonpayable"
@@ -597,7 +661,10 @@ export interface PremiumHotel extends BaseContract {
         bigint,
         bigint,
         bigint,
+        bigint,
         string,
+        bigint,
+        bigint,
         bigint,
         string,
         string,
@@ -605,10 +672,13 @@ export interface PremiumHotel extends BaseContract {
         boolean
       ] & {
         id: bigint;
-        price: bigint;
+        pricePerNight: bigint;
+        totalPrice: bigint;
         status: bigint;
         occupant: string;
         bookingTime: bigint;
+        checkInTime: bigint;
+        checkOutTime: bigint;
         name: string;
         roomType: string;
         imageUrl: string;
@@ -638,7 +708,7 @@ export interface PremiumHotel extends BaseContract {
   >;
 
   updateRoomPrice: TypedContractMethod<
-    [_roomId: BigNumberish, _newPrice: BigNumberish],
+    [_roomId: BigNumberish, _newPricePerNight: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -661,13 +731,26 @@ export interface PremiumHotel extends BaseContract {
   getFunction(
     nameOrSignature: "addRoom"
   ): TypedContractMethod<
-    [_price: BigNumberish, _name: string, _roomType: string, _imageUrl: string],
+    [
+      _pricePerNight: BigNumberish,
+      _name: string,
+      _roomType: string,
+      _imageUrl: string
+    ],
     [void],
     "nonpayable"
   >;
   getFunction(
     nameOrSignature: "bookRoom"
-  ): TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
+  ): TypedContractMethod<
+    [
+      _roomId: BigNumberish,
+      _checkInTime: BigNumberish,
+      _checkOutTime: BigNumberish
+    ],
+    [void],
+    "payable"
+  >;
   getFunction(
     nameOrSignature: "cancelReservation"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
@@ -676,6 +759,9 @@ export interface PremiumHotel extends BaseContract {
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "confirmCheckIn"
+  ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "expireBooking"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "forceResetRoom"
@@ -721,7 +807,10 @@ export interface PremiumHotel extends BaseContract {
         bigint,
         bigint,
         bigint,
+        bigint,
         string,
+        bigint,
+        bigint,
         bigint,
         string,
         string,
@@ -729,10 +818,13 @@ export interface PremiumHotel extends BaseContract {
         boolean
       ] & {
         id: bigint;
-        price: bigint;
+        pricePerNight: bigint;
+        totalPrice: bigint;
         status: bigint;
         occupant: string;
         bookingTime: bigint;
+        checkInTime: bigint;
+        checkOutTime: bigint;
         name: string;
         roomType: string;
         imageUrl: string;
@@ -762,7 +854,7 @@ export interface PremiumHotel extends BaseContract {
   getFunction(
     nameOrSignature: "updateRoomPrice"
   ): TypedContractMethod<
-    [_roomId: BigNumberish, _newPrice: BigNumberish],
+    [_roomId: BigNumberish, _newPricePerNight: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -773,6 +865,13 @@ export interface PremiumHotel extends BaseContract {
     nameOrSignature: "withdrawFunds"
   ): TypedContractMethod<[], [void], "nonpayable">;
 
+  getEvent(
+    key: "BookingExpired"
+  ): TypedContractEvent<
+    BookingExpiredEvent.InputTuple,
+    BookingExpiredEvent.OutputTuple,
+    BookingExpiredEvent.OutputObject
+  >;
   getEvent(
     key: "CheckedIn"
   ): TypedContractEvent<
@@ -852,6 +951,17 @@ export interface PremiumHotel extends BaseContract {
   >;
 
   filters: {
+    "BookingExpired(uint256,address)": TypedContractEvent<
+      BookingExpiredEvent.InputTuple,
+      BookingExpiredEvent.OutputTuple,
+      BookingExpiredEvent.OutputObject
+    >;
+    BookingExpired: TypedContractEvent<
+      BookingExpiredEvent.InputTuple,
+      BookingExpiredEvent.OutputTuple,
+      BookingExpiredEvent.OutputObject
+    >;
+
     "CheckedIn(uint256,address,address)": TypedContractEvent<
       CheckedInEvent.InputTuple,
       CheckedInEvent.OutputTuple,
@@ -940,7 +1050,7 @@ export interface PremiumHotel extends BaseContract {
       RoomAddedEvent.OutputObject
     >;
 
-    "RoomBooked(uint256,address,uint256)": TypedContractEvent<
+    "RoomBooked(uint256,address,uint256,uint256,uint256,uint256)": TypedContractEvent<
       RoomBookedEvent.InputTuple,
       RoomBookedEvent.OutputTuple,
       RoomBookedEvent.OutputObject

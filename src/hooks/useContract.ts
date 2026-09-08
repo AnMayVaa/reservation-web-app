@@ -8,10 +8,13 @@ import { useWallet } from "@/hooks/useWallet";
 
 export interface Room {
   id: bigint;
-  price: bigint;
+  pricePerNight: bigint;
+  totalPrice: bigint;
   status: number;
   occupant: string;
   bookingTime: bigint;
+  checkInTime: bigint;
+  checkOutTime: bigint;
   name: string;
   roomType: string;
   imageUrl: string;
@@ -22,10 +25,13 @@ export interface Room {
 const DEMO_ROOMS: Room[] = [
   {
     id: 1n,
-    price: ethers.parseEther("0.05"),
+    pricePerNight: ethers.parseEther("0.02"),
+    totalPrice: 0n,
     status: 0,
     occupant: "0x0000000000000000000000000000000000000000",
     bookingTime: 0n,
+    checkInTime: 0n,
+    checkOutTime: 0n,
     name: "Ocean View Deluxe",
     roomType: "Deluxe",
     imageUrl: DEFAULT_ROOM_IMAGES.Deluxe,
@@ -33,10 +39,13 @@ const DEMO_ROOMS: Room[] = [
   },
   {
     id: 2n,
-    price: ethers.parseEther("0.08"),
+    pricePerNight: ethers.parseEther("0.04"),
+    totalPrice: 0n,
     status: 0,
     occupant: "0x0000000000000000000000000000000000000000",
     bookingTime: 0n,
+    checkInTime: 0n,
+    checkOutTime: 0n,
     name: "Executive Sky Suite",
     roomType: "Suite",
     imageUrl: DEFAULT_ROOM_IMAGES.Suite,
@@ -44,10 +53,13 @@ const DEMO_ROOMS: Room[] = [
   },
   {
     id: 3n,
-    price: ethers.parseEther("0.12"),
+    pricePerNight: ethers.parseEther("0.06"),
+    totalPrice: 0n,
     status: 0,
     occupant: "0x0000000000000000000000000000000000000000",
     bookingTime: 0n,
+    checkInTime: 0n,
+    checkOutTime: 0n,
     name: "Presidential Royal Villa",
     roomType: "Penthouse",
     imageUrl: DEFAULT_ROOM_IMAGES.Penthouse,
@@ -90,29 +102,39 @@ function extractErrorMessage(e: unknown): string {
     "";
 
   if (raw.includes("Error: Only Owner can perform this action")) {
-    return "Error: Only the Hotel Owner wallet can perform this action. Switch to your deployer wallet in MetaMask.";
+    return "Error: Only the Hotel Owner wallet can perform this action.";
   }
   if (raw.includes("Address is already a receptionist")) {
     return "This address is already registered as a receptionist.";
   }
   if (raw.includes("Must pay exactly 50% deposit")) {
-    return "Must send exactly 50% of the room price as deposit.";
+    return "Must send exactly 50% of the total booking price as deposit.";
   }
-  if (raw.includes("user rejected") || raw.includes("User rejected")) {
-    return "Transaction was rejected in MetaMask.";
+  if (raw.includes("user rejected") || raw.includes("User rejected") || raw.includes("ACTION_REJECTED")) {
+    return "Transaction was cancelled in MetaMask.";
   }
   if (raw.includes("insufficient funds")) {
-    return "Insufficient Sepolia ETH balance in your wallet.";
+    return "Insufficient Sepolia ETH balance in your wallet to cover gas.";
+  }
+  if (raw.includes("Check-in time cannot be in the past")) {
+    return "Selected check-in time cannot be in the past.";
+  }
+  if (raw.includes("Check-out time must be after check-in")) {
+    return "Check-out time must be after the check-in time.";
+  }
+  if (raw.includes("Booking has not yet expired")) {
+    return "This booking duration has not expired yet.";
   }
   if (raw.includes("missing revert data") || raw.includes("require(false)") || raw.includes("CALL_EXCEPTION")) {
-    return "Permission Denied: Only the Contract Owner (deployer wallet) can execute this admin action. Please switch to your Owner wallet in MetaMask.";
+    return "Action reverted: Permission denied or invalid booking parameters.";
   }
 
-  return err.reason || err.shortMessage || err.message || "Transaction failed";
+  return err.shortMessage || err.reason || err.message || "Transaction failed";
 }
 
 export function useContract() {
-  const { signer, isConnected, isCorrectNetwork, refreshRole } = useWallet();
+  const { isConnected, isCorrectNetwork, refreshRole } = useWallet();
+
   const [rooms, setRooms] = useState<Room[]>([]);
   const [receptionists, setReceptionists] = useState<string[]>([]);
   const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
@@ -149,10 +171,13 @@ export function useContract() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mapped: Room[] = rawRooms.map((r: any) => ({
         id: BigInt(r.id),
-        price: BigInt(r.price),
+        pricePerNight: BigInt(r.pricePerNight || r.price || 0n),
+        totalPrice: BigInt(r.totalPrice || 0n),
         status: Number(r.status),
         occupant: r.occupant as string,
-        bookingTime: BigInt(r.bookingTime),
+        bookingTime: BigInt(r.bookingTime || 0n),
+        checkInTime: BigInt(r.checkInTime || 0n),
+        checkOutTime: BigInt(r.checkOutTime || 0n),
         name: r.name || `Room ${r.id}`,
         roomType: r.roomType || "Standard",
         imageUrl: r.imageUrl || DEFAULT_ROOM_IMAGES.Standard,
@@ -185,16 +210,13 @@ export function useContract() {
         throw new Error("MetaMask not detected. Please install MetaMask.");
       }
       if (!CONTRACT_ADDRESS || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
-        throw new Error("Contract address is not configured yet. Please deploy the contract and set the address.");
+        throw new Error("Contract address is not configured yet. Please deploy the contract.");
       }
       setTxPending(true);
       setError(null);
       try {
         const liveProvider = new ethers.BrowserProvider(window.ethereum);
         const liveSigner = await liveProvider.getSigner();
-        const activeAddr = await liveSigner.getAddress();
-        console.log("Executing transaction with active wallet:", activeAddr);
-
         const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, liveSigner);
         const tx = await fn(contract);
         await tx.wait();
@@ -212,83 +234,124 @@ export function useContract() {
   );
 
   // ── Customer Functions ────────────────────────────────
+
   const bookRoom = useCallback(
-    (roomId: bigint, depositWei: bigint) =>
-      sendTx((c) => c.bookRoom(roomId, { value: depositWei })),
+    (roomId: bigint, checkInTimestamp: number, checkOutTimestamp: number, depositWei: bigint) => {
+      return sendTx((c) =>
+        c.bookRoom(roomId, checkInTimestamp, checkOutTimestamp, { value: depositWei })
+      );
+    },
     [sendTx]
   );
 
   const cancelReservation = useCallback(
-    (roomId: bigint) => sendTx((c) => c.cancelReservation(roomId)),
+    (roomId: bigint) => {
+      return sendTx((c) => c.cancelReservation(roomId));
+    },
     [sendTx]
   );
 
   const payRemaining = useCallback(
-    (roomId: bigint, amountWei: bigint) =>
-      sendTx((c) => c.payRemaining(roomId, { value: amountWei })),
-    [sendTx]
-  );
-
-  // ── Receptionist Functions ────────────────────────────
-  const confirmCheckIn = useCallback(
-    (roomId: bigint) => sendTx((c) => c.confirmCheckIn(roomId)),
+    (roomId: bigint, remainingWei: bigint) => {
+      return sendTx((c) => c.payRemaining(roomId, { value: remainingWei }));
+    },
     [sendTx]
   );
 
   const checkoutRoom = useCallback(
-    (roomId: bigint) => sendTx((c) => c.checkoutRoom(roomId)),
+    (roomId: bigint) => {
+      return sendTx((c) => c.checkoutRoom(roomId));
+    },
     [sendTx]
   );
 
-  // ── Owner Functions: Room Management ──────────────────
+  const expireBooking = useCallback(
+    (roomId: bigint) => {
+      return sendTx((c) => c.expireBooking(roomId));
+    },
+    [sendTx]
+  );
+
+  // ── Staff & Key Unlock Functions ─────────────────────
+
+  const confirmCheckIn = useCallback(
+    (roomId: bigint) => {
+      return sendTx((c) => c.confirmCheckIn(roomId));
+    },
+    [sendTx]
+  );
+
+  /// Off-Chain EIP-191 Cryptographic Challenge Signing (0 Gas)
+  const signDoorChallenge = useCallback(
+    async (roomId: bigint, nonce: string, timestamp: number): Promise<string> => {
+      if (typeof window === "undefined" || !window.ethereum) {
+        throw new Error("MetaMask not detected");
+      }
+      const liveProvider = new ethers.BrowserProvider(window.ethereum);
+      const liveSigner = await liveProvider.getSigner();
+      
+      const message = `[SmartHotel IoT Lock]\nRoom ID: ${roomId.toString()}\nNonce: ${nonce}\nTimestamp: ${timestamp}\nAction: UNLOCK_DOOR`;
+      const signature = await liveSigner.signMessage(message);
+      return signature;
+    },
+    []
+  );
+
+  // ── Owner Functions ───────────────────────────────────
+
   const addRoom = useCallback(
-    (priceEth: string, name: string, roomType: string, imageUrl: string) => {
-      const priceWei = ethers.parseEther(priceEth);
-      const img = imageUrl || DEFAULT_ROOM_IMAGES[roomType] || DEFAULT_ROOM_IMAGES.Standard;
-      return sendTx((c) => c.addRoom(priceWei, name, roomType, img));
+    (pricePerNightEth: string, name: string, roomType: string, imageUrl: string) => {
+      const priceWei = ethers.parseEther(pricePerNightEth);
+      return sendTx((c) => c.addRoom(priceWei, name, roomType, imageUrl));
     },
     [sendTx]
   );
 
   const updateRoomPrice = useCallback(
     (roomId: bigint, newPriceEth: string) => {
-      const newPriceWei = ethers.parseEther(newPriceEth);
-      return sendTx((c) => c.updateRoomPrice(roomId, newPriceWei));
+      const priceWei = ethers.parseEther(newPriceEth);
+      return sendTx((c) => c.updateRoomPrice(roomId, priceWei));
     },
     [sendTx]
   );
 
   const updateRoomDetails = useCallback(
     (roomId: bigint, name: string, roomType: string, imageUrl: string) => {
-      const img = imageUrl || DEFAULT_ROOM_IMAGES[roomType] || DEFAULT_ROOM_IMAGES.Standard;
-      return sendTx((c) => c.updateRoomDetails(roomId, name, roomType, img));
+      return sendTx((c) => c.updateRoomDetails(roomId, name, roomType, imageUrl));
     },
     [sendTx]
   );
 
   const toggleRoomActive = useCallback(
-    (roomId: bigint) => sendTx((c) => c.toggleRoomActive(roomId)),
+    (roomId: bigint) => {
+      return sendTx((c) => c.toggleRoomActive(roomId));
+    },
     [sendTx]
   );
 
   const forceResetRoom = useCallback(
-    (roomId: bigint, refundOccupant: boolean) =>
-      sendTx((c) => c.forceResetRoom(roomId, refundOccupant)),
+    (roomId: bigint, refundOccupant: boolean) => {
+      return sendTx((c) => c.forceResetRoom(roomId, refundOccupant));
+    },
     [sendTx]
   );
 
-  // ── Owner Functions: Receptionist Management ──────────
   const addReceptionist = useCallback(
-    (address: string) => sendTx((c) => c.addReceptionist(address)),
+    (address: string) => {
+      const clean = ethers.getAddress(address.trim());
+      return sendTx((c) => c.addReceptionist(clean));
+    },
     [sendTx]
   );
 
   const removeReceptionist = useCallback(
-    (address: string) => sendTx((c) => c.removeReceptionist(address)),
+    (address: string) => {
+      const clean = ethers.getAddress(address.trim());
+      return sendTx((c) => c.removeReceptionist(clean));
+    },
     [sendTx]
   );
 
-  // ── Owner Functions: Financial ────────────────────────
   const withdrawCustom = useCallback(
     (amountEth: string) => {
       const amountWei = ethers.parseEther(amountEth);
@@ -297,10 +360,9 @@ export function useContract() {
     [sendTx]
   );
 
-  const withdrawFunds = useCallback(
-    () => sendTx((c) => c.withdrawFunds()),
-    [sendTx]
-  );
+  const withdrawFunds = useCallback(() => {
+    return sendTx((c) => c.withdrawFunds());
+  }, [sendTx]);
 
   return {
     rooms,
@@ -310,15 +372,19 @@ export function useContract() {
     loading,
     txPending,
     error,
-    setError,
     isDemoMode,
     isContractConfigured,
-    isReady: isConnected && isCorrectNetwork,
+    fetchRooms,
+    // Customer
     bookRoom,
     cancelReservation,
     payRemaining,
-    confirmCheckIn,
     checkoutRoom,
+    expireBooking,
+    // Staff & IoT Key
+    confirmCheckIn,
+    signDoorChallenge,
+    // Owner
     addRoom,
     updateRoomPrice,
     updateRoomDetails,
@@ -328,6 +394,5 @@ export function useContract() {
     removeReceptionist,
     withdrawCustom,
     withdrawFunds,
-    refetch: fetchRooms,
   };
 }
