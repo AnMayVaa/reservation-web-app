@@ -7,6 +7,9 @@ import OwnerPanel from "@/components/OwnerPanel";
 import ReceptionistPanel from "@/components/ReceptionistPanel";
 import FloatingCartBar from "@/components/Cart/FloatingCartBar";
 import CartModal from "@/components/Cart/CartModal";
+import BatchPayRemainingCard from "@/components/BatchPayRemainingCard";
+import GasReceiptToast from "@/components/GasReceiptToast";
+import GasTrackerModal from "@/components/Modals/GasTrackerModal";
 
 export default function Home() {
   const { role, isConnected, isCorrectNetwork, connect, switchToSepolia } = useWallet();
@@ -109,6 +112,9 @@ export default function Home() {
         </section>
       )}
 
+      {/* Multi-Room Pay Remaining Panel (when guest has booked rooms) */}
+      <BatchPayRemainingCard />
+
       {/* Main Room Explorer */}
       <section className="space-y-6">
         <div className="flex items-center justify-between">
@@ -183,6 +189,10 @@ export default function Home() {
       {/* Floating Cart Bar & Batch Checkout Modal */}
       <FloatingCartBar />
       <CartModal />
+
+      {/* Gas Receipt Toast & Comparison Modal */}
+      <GasReceiptToast />
+      <GasTrackerModal />
     </div>
   );
 }

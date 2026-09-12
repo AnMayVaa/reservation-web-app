@@ -6,10 +6,12 @@ import { CONTRACT_ADDRESS } from "@/lib/constants";
 import WalletButton from "@/components/WalletButton";
 import GasGuideModal from "@/components/Modals/GasGuideModal";
 import { useCart } from "@/hooks/useCart";
+import { useGasTracker } from "@/hooks/useGasTracker";
 
 export default function Navbar() {
   const [isGasGuideOpen, setIsGasGuideOpen] = useState(false);
   const { totalRooms, setIsCartOpen } = useCart();
+  const { receipts, setIsTrackerOpen } = useGasTracker();
 
   const isContractConfigured =
     CONTRACT_ADDRESS &&
@@ -62,6 +64,20 @@ export default function Navbar() {
             >
               <span>⛽</span>
               <span className="hidden sm:inline">Gas Guide</span>
+            </button>
+
+            {/* Gas Tracker & Comparison Button */}
+            <button
+              onClick={() => setIsTrackerOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-bold text-amber-300 transition cursor-pointer"
+            >
+              <span>📊</span>
+              <span className="hidden sm:inline">Gas Tracker</span>
+              {receipts.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black">
+                  {receipts.length}
+                </span>
+              )}
             </button>
 
             {isContractConfigured && (

@@ -5,6 +5,7 @@ import { ethers } from "ethers";
 import { CONTRACT_ADDRESS, SEPOLIA_RPC_URLS, DEFAULT_ROOM_IMAGES } from "@/lib/constants";
 import { PREMIUM_HOTEL_ABI } from "@/lib/abi";
 import { useWallet } from "@/hooks/useWallet";
+import { useGasTracker } from "@/hooks/useGasTracker";
 
 export interface Room {
   id: bigint;
@@ -160,8 +161,16 @@ function extractErrorMessage(e: unknown): string {
   return err.shortMessage || err.reason || err.message || "Transaction failed";
 }
 
+export interface TxMeta {
+  title: string;
+  methodName: string;
+  roomCount?: number;
+  savingsNote?: string;
+}
+
 export function useContract() {
   const { isConnected, isCorrectNetwork, refreshRole } = useWallet();
+  const { addReceipt } = useGasTracker();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [receptionists, setReceptionists] = useState<string[]>([]);
@@ -233,7 +242,10 @@ export function useContract() {
 
   // Execute transaction helper — dynamically requests fresh active signer
   const sendTx = useCallback(
-    async (fn: (contract: ethers.Contract) => Promise<ethers.ContractTransactionResponse>) => {
+    async (
+      fn: (contract: ethers.Contract) => Promise<ethers.ContractTransactionResponse>,
+      meta?: TxMeta
+    ) => {
       if (typeof window === "undefined" || !window.ethereum) {
         throw new Error("MetaMask not detected. Please install MetaMask.");
       }
@@ -247,7 +259,29 @@ export function useContract() {
         const liveSigner = await liveProvider.getSigner();
         const contract = new ethers.Contract(CONTRACT_ADDRESS, PREMIUM_HOTEL_ABI, liveSigner);
         const tx = await fn(contract);
-        await tx.wait();
+        const receipt = await tx.wait();
+
+        if (receipt) {
+          const gasUsedBigInt = receipt.gasUsed ?? 0n;
+          const gasPriceBigInt = receipt.gasPrice ?? 0n;
+          const totalFeeWei = gasUsedBigInt * gasPriceBigInt;
+          const totalFeeEth = ethers.formatEther(totalFeeWei);
+          const gasPriceGwei = ethers.formatUnits(gasPriceBigInt, "gwei");
+
+          addReceipt({
+            title: meta?.title || "Contract Transaction",
+            methodName: meta?.methodName || "contractCall",
+            roomCount: meta?.roomCount || 1,
+            gasUsed: gasUsedBigInt.toString(),
+            effectiveGasPriceGwei: parseFloat(gasPriceGwei).toFixed(3),
+            totalGasFeeEth: totalFeeEth,
+            txHash: receipt.hash,
+            blockNumber: receipt.blockNumber,
+            status: receipt.status === 1 ? "success" : "reverted",
+            savingsNote: meta?.savingsNote,
+          });
+        }
+
         await fetchRooms();
         await refreshRole();
       } catch (e: unknown) {
@@ -258,15 +292,21 @@ export function useContract() {
         setTxPending(false);
       }
     },
-    [fetchRooms, refreshRole]
+    [fetchRooms, refreshRole, addReceipt]
   );
 
   // ── Customer Functions ────────────────────────────────
 
   const bookRoom = useCallback(
     (roomId: bigint, checkInTimestamp: number, checkOutTimestamp: number, depositWei: bigint) => {
-      return sendTx((c) =>
-        c.bookRoom(roomId, checkInTimestamp, checkOutTimestamp, { value: depositWei })
+      return sendTx(
+        (c) => c.bookRoom(roomId, checkInTimestamp, checkOutTimestamp, { value: depositWei }),
+        {
+          title: `Single Book Suite #${roomId.toString()}`,
+          methodName: "bookRoom",
+          roomCount: 1,
+          savingsNote: "Standard individual suite booking on Sepolia",
+        }
       );
     },
     [sendTx]
@@ -279,10 +319,17 @@ export function useContract() {
       checkOutTimestamps: number[],
       totalDepositWei: bigint
     ) => {
-      return sendTx((c) =>
-        c.bookRoomsBatch(roomIds, checkInTimestamps, checkOutTimestamps, {
-          value: totalDepositWei,
-        })
+      return sendTx(
+        (c) =>
+          c.bookRoomsBatch(roomIds, checkInTimestamps, checkOutTimestamps, {
+            value: totalDepositWei,
+          }),
+        {
+          title: `Batch Book Suites (${roomIds.length} Rooms)`,
+          methodName: "bookRoomsBatch",
+          roomCount: roomIds.length,
+          savingsNote: `Bundled ${roomIds.length} rooms into 1 transaction. Saved base 21,000 tx gas and contract call overhead!`,
+        }
       );
     },
     [sendTx]
@@ -290,22 +337,38 @@ export function useContract() {
 
   const cancelReservation = useCallback(
     (roomId: bigint) => {
-      return sendTx((c) => c.cancelReservation(roomId));
+      return sendTx((c) => c.cancelReservation(roomId), {
+        title: `Cancel Reservation Suite #${roomId.toString()}`,
+        methodName: "cancelReservation",
+        roomCount: 1,
+        savingsNote: "50% refund processed on-chain within 24h guaranteed window",
+      });
     },
     [sendTx]
   );
 
   const payRemaining = useCallback(
     (roomId: bigint, remainingWei: bigint) => {
-      return sendTx((c) => c.payRemaining(roomId, { value: remainingWei }));
+      return sendTx((c) => c.payRemaining(roomId, { value: remainingWei }), {
+        title: `Single Pay Remaining Suite #${roomId.toString()}`,
+        methodName: "payRemaining",
+        roomCount: 1,
+        savingsNote: "Single 50% remaining balance payment",
+      });
     },
     [sendTx]
   );
 
   const payRemainingBatch = useCallback(
     (roomIds: bigint[], totalRemainingWei: bigint) => {
-      return sendTx((c) =>
-        c.payRemainingBatch(roomIds, { value: totalRemainingWei })
+      return sendTx(
+        (c) => c.payRemainingBatch(roomIds, { value: totalRemainingWei }),
+        {
+          title: `Batch Pay Remaining (${roomIds.length} Rooms)`,
+          methodName: "payRemainingBatch",
+          roomCount: roomIds.length,
+          savingsNote: `Bundled remaining payment for ${roomIds.length} rooms in 1 atomic transaction!`,
+        }
       );
     },
     [sendTx]
@@ -313,21 +376,36 @@ export function useContract() {
 
   const checkoutRoom = useCallback(
     (roomId: bigint) => {
-      return sendTx((c) => c.checkoutRoom(roomId));
+      return sendTx((c) => c.checkoutRoom(roomId), {
+        title: `Self Check-Out Suite #${roomId.toString()}`,
+        methodName: "checkoutRoom",
+        roomCount: 1,
+        savingsNote: "Released suite back to Available on-chain",
+      });
     },
     [sendTx]
   );
 
   const checkoutRoomBatch = useCallback(
     (roomIds: bigint[]) => {
-      return sendTx((c) => c.checkoutRoomBatch(roomIds));
+      return sendTx((c) => c.checkoutRoomBatch(roomIds), {
+        title: `Batch Check-Out (${roomIds.length} Rooms)`,
+        methodName: "checkoutRoomBatch",
+        roomCount: roomIds.length,
+        savingsNote: `Released ${roomIds.length} suites simultaneously in 1 transaction`,
+      });
     },
     [sendTx]
   );
 
   const expireBooking = useCallback(
     (roomId: bigint) => {
-      return sendTx((c) => c.expireBooking(roomId));
+      return sendTx((c) => c.expireBooking(roomId), {
+        title: `Expire Booking Suite #${roomId.toString()}`,
+        methodName: "expireBooking",
+        roomCount: 1,
+        savingsNote: "Released expired booking after checkout time passed",
+      });
     },
     [sendTx]
   );
@@ -336,25 +414,44 @@ export function useContract() {
 
   const confirmCheckIn = useCallback(
     (roomId: bigint) => {
-      return sendTx((c) => c.confirmCheckIn(roomId));
+      return sendTx((c) => c.confirmCheckIn(roomId), {
+        title: `On-Chain Staff Check-In Suite #${roomId.toString()}`,
+        methodName: "confirmCheckIn",
+        roomCount: 1,
+        savingsNote: "Recorded check-in state change on Sepolia",
+      });
     },
     [sendTx]
   );
 
   /// Off-Chain EIP-191 Cryptographic Challenge Signing (0 Gas)
   const signDoorChallenge = useCallback(
-    async (roomId: bigint, nonce: string, timestamp: number): Promise<string> => {
+    async (roomId: bigint, otp: string, timestamp: number): Promise<string> => {
       if (typeof window === "undefined" || !window.ethereum) {
         throw new Error("MetaMask not detected");
       }
       const liveProvider = new ethers.BrowserProvider(window.ethereum);
       const liveSigner = await liveProvider.getSigner();
       
-      const message = `[SmartHotel IoT Lock]\nRoom ID: ${roomId.toString()}\nNonce: ${nonce}\nTimestamp: ${timestamp}\nAction: UNLOCK_DOOR`;
+      const message = `[SmartHotel IoT Lock]\nRoom ID: ${roomId.toString()}\nDynamic Door OTP: ${otp}\nTimestamp: ${timestamp}\nAction: UNLOCK_DOOR`;
       const signature = await liveSigner.signMessage(message);
+
+      // Record off-chain 0 gas event for comparison
+      addReceipt({
+        title: `Digital Door OTP Unlock (Suite #${roomId.toString()})`,
+        methodName: "EIP-191 personal_sign",
+        roomCount: 1,
+        gasUsed: "0",
+        effectiveGasPriceGwei: "0",
+        totalGasFeeEth: "0.000000",
+        status: "success",
+        isOffChain: true,
+        savingsNote: "Zero Gas (100% Free) - Cryptographic signature verified off-chain by IoT Lock without mining",
+      });
+
       return signature;
     },
-    []
+    [addReceipt]
   );
 
   // ── Owner Functions ───────────────────────────────────
@@ -362,7 +459,11 @@ export function useContract() {
   const addRoom = useCallback(
     (pricePerNightEth: string, name: string, roomType: string, imageUrl: string) => {
       const priceWei = ethers.parseEther(pricePerNightEth);
-      return sendTx((c) => c.addRoom(priceWei, name, roomType, imageUrl));
+      return sendTx((c) => c.addRoom(priceWei, name, roomType, imageUrl), {
+        title: `Add New Room (${name})`,
+        methodName: "addRoom",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
@@ -370,28 +471,44 @@ export function useContract() {
   const updateRoomPrice = useCallback(
     (roomId: bigint, newPriceEth: string) => {
       const priceWei = ethers.parseEther(newPriceEth);
-      return sendTx((c) => c.updateRoomPrice(roomId, priceWei));
+      return sendTx((c) => c.updateRoomPrice(roomId, priceWei), {
+        title: `Update Room #${roomId.toString()} Price`,
+        methodName: "updateRoomPrice",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
 
   const updateRoomDetails = useCallback(
     (roomId: bigint, name: string, roomType: string, imageUrl: string) => {
-      return sendTx((c) => c.updateRoomDetails(roomId, name, roomType, imageUrl));
+      return sendTx((c) => c.updateRoomDetails(roomId, name, roomType, imageUrl), {
+        title: `Update Room #${roomId.toString()} Details`,
+        methodName: "updateRoomDetails",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
 
   const toggleRoomActive = useCallback(
     (roomId: bigint) => {
-      return sendTx((c) => c.toggleRoomActive(roomId));
+      return sendTx((c) => c.toggleRoomActive(roomId), {
+        title: `Toggle Room #${roomId.toString()} Active`,
+        methodName: "toggleRoomActive",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
 
   const forceResetRoom = useCallback(
     (roomId: bigint, refundOccupant: boolean) => {
-      return sendTx((c) => c.forceResetRoom(roomId, refundOccupant));
+      return sendTx((c) => c.forceResetRoom(roomId, refundOccupant), {
+        title: `Force Reset Room #${roomId.toString()}`,
+        methodName: "forceResetRoom",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
@@ -399,7 +516,11 @@ export function useContract() {
   const addReceptionist = useCallback(
     (address: string) => {
       const clean = ethers.getAddress(address.trim());
-      return sendTx((c) => c.addReceptionist(clean));
+      return sendTx((c) => c.addReceptionist(clean), {
+        title: `Add Receptionist (${clean.slice(0, 6)}...${clean.slice(-4)})`,
+        methodName: "addReceptionist",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
@@ -407,7 +528,11 @@ export function useContract() {
   const removeReceptionist = useCallback(
     (address: string) => {
       const clean = ethers.getAddress(address.trim());
-      return sendTx((c) => c.removeReceptionist(clean));
+      return sendTx((c) => c.removeReceptionist(clean), {
+        title: `Remove Receptionist (${clean.slice(0, 6)}...${clean.slice(-4)})`,
+        methodName: "removeReceptionist",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
@@ -415,13 +540,21 @@ export function useContract() {
   const withdrawCustom = useCallback(
     (amountEth: string) => {
       const amountWei = ethers.parseEther(amountEth);
-      return sendTx((c) => c.withdrawCustom(amountWei));
+      return sendTx((c) => c.withdrawCustom(amountWei), {
+        title: `Withdraw ${amountEth} ETH`,
+        methodName: "withdrawCustom",
+        roomCount: 1,
+      });
     },
     [sendTx]
   );
 
   const withdrawFunds = useCallback(() => {
-    return sendTx((c) => c.withdrawFunds());
+    return sendTx((c) => c.withdrawFunds(), {
+      title: "Withdraw All Contract Funds",
+      methodName: "withdrawFunds",
+      roomCount: 1,
+    });
   }, [sendTx]);
 
   return {

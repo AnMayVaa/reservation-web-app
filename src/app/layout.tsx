@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { WalletProvider } from "@/hooks/useWallet";
 import { CartProvider } from "@/hooks/useCart";
+import { GasTrackerProvider } from "@/hooks/useGasTracker";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -17,10 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className={`${geist.className} bg-slate-950 text-slate-100 min-h-screen antialiased`}>
         <WalletProvider>
-          <CartProvider>
-            <Navbar />
-            <main>{children}</main>
-          </CartProvider>
+          <GasTrackerProvider>
+            <CartProvider>
+              <Navbar />
+              <main>{children}</main>
+            </CartProvider>
+          </GasTrackerProvider>
         </WalletProvider>
       </body>
     </html>
