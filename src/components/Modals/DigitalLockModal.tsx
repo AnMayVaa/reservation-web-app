@@ -21,16 +21,16 @@ export default function DigitalLockModal({
   const { account } = useWallet();
 
   const [totpSecondsLeft, setTotpSecondsLeft] = useState(30);
-  const [currentNonce, setCurrentNonce] = useState("849201");
+  const [currentOTP, setCurrentOTP] = useState("849201");
   const [currentTimestamp, setCurrentTimestamp] = useState(Math.floor(Date.now() / 1000));
   
-  // Keep live references to active nonce & timestamp for expiry checking
-  const activeNonceRef = useRef(currentNonce);
+  // Keep live references to active OTP & timestamp for expiry checking
+  const activeOTPRef = useRef(currentOTP);
   const activeTimestampRef = useRef(currentTimestamp);
   useEffect(() => {
-    activeNonceRef.current = currentNonce;
+    activeOTPRef.current = currentOTP;
     activeTimestampRef.current = currentTimestamp;
-  }, [currentNonce, currentTimestamp]);
+  }, [currentOTP, currentTimestamp]);
 
   const [signing, setSigning] = useState(false);
   const [syncingOnChain, setSyncingOnChain] = useState(false);
@@ -48,9 +48,9 @@ export default function DigitalLockModal({
       setCurrentTimestamp(now);
 
       if (secondsLeft === 30 || secondsLeft === 1) {
-        // Rotate pseudo-random 6-digit nonce for this 30s window
-        const newNonce = Math.floor(100000 + Math.random() * 900000).toString();
-        setCurrentNonce(newNonce);
+        // Rotate pseudo-random 6-digit OTP for this 30s window
+        const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        setCurrentOTP(newOTP);
       }
     }, 1000);
 
@@ -66,7 +66,7 @@ export default function DigitalLockModal({
     }
   }, [isOpen]);
 
-  // Genuine MetaMask signature unlock (EIP-191) with schedule and nonce-expiry checks
+  // Genuine MetaMask signature unlock (EIP-191) with schedule and OTP-expiry checks
   const handleRealUnlock = useCallback(async () => {
     if (!room || !account) return;
     setSigning(true);
@@ -100,8 +100,8 @@ export default function DigitalLockModal({
       return;
     }
 
-    // Capture the nonce & timestamp presented to user when clicking sign
-    const challengeNonce = currentNonce;
+    // Capture the OTP & timestamp presented to user when clicking sign
+    const challengeOTP = currentOTP;
     const challengeTimestamp = currentTimestamp;
 
     try {
@@ -111,22 +111,22 @@ export default function DigitalLockModal({
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
 
-      const challengeMessage = `[SmartHotel IoT Lock]\nRoom ID: ${room.id.toString()}\nNonce: ${challengeNonce}\nTimestamp: ${challengeTimestamp}\nAction: UNLOCK_DOOR`;
+      const challengeMessage = `[SmartHotel IoT Lock]\nRoom ID: ${room.id.toString()}\nDoor OTP: ${challengeOTP}\nTimestamp: ${challengeTimestamp}\nAction: UNLOCK_DOOR`;
       
       // Guest signs with their private key (0 Gas)
       const signature = await signer.signMessage(challengeMessage);
 
-      // 2. Dynamic Nonce Expiration Check:
-      // If the user took longer than 30 seconds or the active nonce changed during signing
+      // 2. Dynamic Door OTP Expiration Check:
+      // If the user took longer than 30 seconds or the active OTP changed during signing
       const finishedNowSec = Math.floor(Date.now() / 1000);
       const isExpiredWindow =
         finishedNowSec - challengeTimestamp > 30 ||
-        challengeNonce !== activeNonceRef.current;
+        challengeOTP !== activeOTPRef.current;
 
       if (isExpiredWindow) {
         setUnlockStatus("expired");
         setStatusMessage(
-          `⏱️ DYNAMIC NONCE EXPIRED (>30s): You signed challenge with Nonce [${challengeNonce}], but the lock rotated to Nonce [${activeNonceRef.current}]. The lock rejected this signature to prevent replay attacks! Please sign the live active nonce.`
+          `⏱️ DYNAMIC DOOR OTP EXPIRED (>30s): You signed challenge with OTP [${challengeOTP}], but the lock rotated to OTP [${activeOTPRef.current}]. The lock rejected this signature to prevent replay attacks! Please sign the live active OTP.`
         );
         return;
       }
@@ -137,7 +137,7 @@ export default function DigitalLockModal({
 
       if (recovered.toLowerCase() === room.occupant.toLowerCase()) {
         setUnlockStatus("success");
-        setStatusMessage("✅ ACCESS GRANTED! Signature verified within active 30s window. Door servo motor activated!");
+        setStatusMessage("✅ ACCESS GRANTED! Signature verified with live Door OTP. Door servo motor activated!");
       } else {
         setUnlockStatus("error");
         setStatusMessage(
@@ -150,7 +150,7 @@ export default function DigitalLockModal({
     } finally {
       setSigning(false);
     }
-  }, [room, account, currentNonce, currentTimestamp]);
+  }, [room, account, currentOTP, currentTimestamp]);
 
   // Optional on-chain check-in trigger
   const handleOnChainSync = useCallback(async () => {
@@ -226,22 +226,22 @@ export default function DigitalLockModal({
           </div>
         )}
 
-        {/* Dynamic Rolling TOTP Nonce Box */}
+        {/* Dynamic Rolling TOTP Door OTP Box */}
         <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Live Door Challenge (TOTP)
+              Live Door OTP (TOTP)
             </span>
             <span className="font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
-              Window expires in: {totpSecondsLeft}s
+              OTP expires in: {totpSecondsLeft}s
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-              <span className="text-[10px] text-slate-500 block uppercase">Dynamic Nonce</span>
-              <span className="font-mono text-sm font-bold text-purple-300">{currentNonce}</span>
+              <span className="text-[10px] text-slate-500 block uppercase">Door OTP (6 Digits)</span>
+              <span className="font-mono text-sm font-bold text-purple-300">{currentOTP}</span>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[10px] text-slate-500 block uppercase">Timestamp</span>
@@ -315,7 +315,7 @@ export default function DigitalLockModal({
             onClick={handleRealUnlock}
             className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-2xl shadow-lg shadow-purple-500/25 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
           >
-            {signing ? "Waiting for MetaMask signature..." : "🔐 Sign Challenge with MetaMask & Unlock Door"}
+            {signing ? "Waiting for MetaMask signature..." : "🔐 Sign Challenge with Door OTP & Unlock Door"}
           </button>
 
           {/* Teacher Test Button: Address Spoofing Attack */}
@@ -329,7 +329,7 @@ export default function DigitalLockModal({
         </div>
 
         <p className="text-[11px] text-slate-500 text-center leading-tight">
-          💡 <strong>Teacher Note:</strong> Challenge rotates every 30 seconds. Signatures signed late or with expired nonces are rejected. Address spoofers fail because they lack the occupant&apos;s private key.
+          💡 <strong>Teacher Note:</strong> Dynamic Door OTP rotates every 30 seconds (TOTP). Signatures signed late or with expired OTPs are rejected. Address spoofers fail because they lack the occupant&apos;s private key.
         </p>
       </div>
     </div>

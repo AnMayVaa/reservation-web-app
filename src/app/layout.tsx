@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { WalletProvider } from "@/hooks/useWallet";
+import { CartProvider } from "@/hooks/useCart";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -16,8 +17,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className={`${geist.className} bg-slate-950 text-slate-100 min-h-screen antialiased`}>
         <WalletProvider>
-          <Navbar />
-          <main>{children}</main>
+          <CartProvider>
+            <Navbar />
+            <main>{children}</main>
+          </CartProvider>
         </WalletProvider>
       </body>
     </html>

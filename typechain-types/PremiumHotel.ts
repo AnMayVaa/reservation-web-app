@@ -74,8 +74,10 @@ export interface PremiumHotelInterface extends Interface {
       | "addReceptionist"
       | "addRoom"
       | "bookRoom"
+      | "bookRoomsBatch"
       | "cancelReservation"
       | "checkoutRoom"
+      | "checkoutRoomBatch"
       | "confirmCheckIn"
       | "expireBooking"
       | "forceResetRoom"
@@ -85,6 +87,7 @@ export interface PremiumHotelInterface extends Interface {
       | "isReceptionist"
       | "owner"
       | "payRemaining"
+      | "payRemainingBatch"
       | "receptionistsList"
       | "removeReceptionist"
       | "rooms"
@@ -125,12 +128,20 @@ export interface PremiumHotelInterface extends Interface {
     values: [BigNumberish, BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
+    functionFragment: "bookRoomsBatch",
+    values: [BigNumberish[], BigNumberish[], BigNumberish[]]
+  ): string;
+  encodeFunctionData(
     functionFragment: "cancelReservation",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "checkoutRoom",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "checkoutRoomBatch",
+    values: [BigNumberish[]]
   ): string;
   encodeFunctionData(
     functionFragment: "confirmCheckIn",
@@ -164,6 +175,10 @@ export interface PremiumHotelInterface extends Interface {
   encodeFunctionData(
     functionFragment: "payRemaining",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "payRemainingBatch",
+    values: [BigNumberish[]]
   ): string;
   encodeFunctionData(
     functionFragment: "receptionistsList",
@@ -206,11 +221,19 @@ export interface PremiumHotelInterface extends Interface {
   decodeFunctionResult(functionFragment: "addRoom", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "bookRoom", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "bookRoomsBatch",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "cancelReservation",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "checkoutRoom",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "checkoutRoomBatch",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -244,6 +267,10 @@ export interface PremiumHotelInterface extends Interface {
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "payRemaining",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "payRemainingBatch",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -592,6 +619,16 @@ export interface PremiumHotel extends BaseContract {
     "payable"
   >;
 
+  bookRoomsBatch: TypedContractMethod<
+    [
+      _roomIds: BigNumberish[],
+      _checkInTimes: BigNumberish[],
+      _checkOutTimes: BigNumberish[]
+    ],
+    [void],
+    "payable"
+  >;
+
   cancelReservation: TypedContractMethod<
     [_roomId: BigNumberish],
     [void],
@@ -600,6 +637,12 @@ export interface PremiumHotel extends BaseContract {
 
   checkoutRoom: TypedContractMethod<
     [_roomId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  checkoutRoomBatch: TypedContractMethod<
+    [_roomIds: BigNumberish[]],
     [void],
     "nonpayable"
   >;
@@ -641,6 +684,12 @@ export interface PremiumHotel extends BaseContract {
   owner: TypedContractMethod<[], [string], "view">;
 
   payRemaining: TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
+
+  payRemainingBatch: TypedContractMethod<
+    [_roomIds: BigNumberish[]],
+    [void],
+    "payable"
+  >;
 
   receptionistsList: TypedContractMethod<
     [arg0: BigNumberish],
@@ -752,11 +801,25 @@ export interface PremiumHotel extends BaseContract {
     "payable"
   >;
   getFunction(
+    nameOrSignature: "bookRoomsBatch"
+  ): TypedContractMethod<
+    [
+      _roomIds: BigNumberish[],
+      _checkInTimes: BigNumberish[],
+      _checkOutTimes: BigNumberish[]
+    ],
+    [void],
+    "payable"
+  >;
+  getFunction(
     nameOrSignature: "cancelReservation"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "checkoutRoom"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "checkoutRoomBatch"
+  ): TypedContractMethod<[_roomIds: BigNumberish[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "confirmCheckIn"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "nonpayable">;
@@ -792,6 +855,9 @@ export interface PremiumHotel extends BaseContract {
   getFunction(
     nameOrSignature: "payRemaining"
   ): TypedContractMethod<[_roomId: BigNumberish], [void], "payable">;
+  getFunction(
+    nameOrSignature: "payRemainingBatch"
+  ): TypedContractMethod<[_roomIds: BigNumberish[]], [void], "payable">;
   getFunction(
     nameOrSignature: "receptionistsList"
   ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;

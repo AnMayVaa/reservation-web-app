@@ -6,6 +6,7 @@ import { ethers } from "ethers";
 import { RoomStatus } from "@/lib/constants";
 import { useWallet } from "@/hooks/useWallet";
 import { useContract, Room } from "@/hooks/useContract";
+import { useCart } from "@/hooks/useCart";
 import StatusBadge from "@/components/StatusBadge";
 import DigitalLockModal from "@/components/Modals/DigitalLockModal";
 
@@ -28,6 +29,9 @@ export default function RoomCard({ room, onEdit }: RoomCardProps) {
     txPending,
     error,
   } = useContract();
+
+  const { addToCart, removeFromCart, isInCart } = useCart();
+  const inCart = isInCart(room.id);
 
   const [localError, setLocalError] = useState<string | null>(null);
   const [localPending, setLocalPending] = useState(false);
@@ -256,17 +260,39 @@ export default function RoomCard({ room, onEdit }: RoomCardProps) {
         <div className="p-5 pt-0 space-y-2">
           {/* Guest: Available to Book */}
           {room.isActive && room.status === RoomStatus.Available && (
-            <button
-              disabled={!canInteract || isPending}
-              onClick={() => {
-                const inSec = Math.floor(new Date(checkInInput).getTime() / 1000);
-                const outSec = Math.floor(new Date(checkOutInput).getTime() / 1000);
-                handle(() => bookRoom(room.id, inSec, outSec, depositWei));
-              }}
-              className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {isPending ? <Spinner /> : `Book ${nights} Night${nights > 1 ? "s" : ""} · Deposit ${ethers.formatEther(depositWei)} ETH`}
-            </button>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  disabled={!canInteract || isPending}
+                  onClick={() => {
+                    const inSec = Math.floor(new Date(checkInInput).getTime() / 1000);
+                    const outSec = Math.floor(new Date(checkOutInput).getTime() / 1000);
+                    handle(() => bookRoom(room.id, inSec, outSec, depositWei));
+                  }}
+                  className="py-2.5 px-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 font-bold text-xs shadow-md shadow-emerald-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isPending ? <Spinner /> : "⚡ Book Now"}
+                </button>
+
+                {inCart ? (
+                  <button
+                    onClick={() => removeFromCart(room.id)}
+                    className="py-2.5 px-3 rounded-2xl bg-amber-500/20 hover:bg-rose-500/20 border border-amber-500/40 hover:border-rose-500/40 text-amber-300 hover:text-rose-300 font-bold text-xs transition active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    ✓ In Cart (Remove)
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      addToCart(room, checkInInput, checkOutInput);
+                    }}
+                    className="py-2.5 px-3 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs transition active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    🛒 Add to Cart
+                  </button>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Guest: Booked (50% paid) */}

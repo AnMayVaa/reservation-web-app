@@ -65,6 +65,34 @@ const DEMO_ROOMS: Room[] = [
     imageUrl: DEFAULT_ROOM_IMAGES.Penthouse,
     isActive: true,
   },
+  {
+    id: 4n,
+    pricePerNight: ethers.parseEther("0.03"),
+    totalPrice: 0n,
+    status: 0,
+    occupant: "0x0000000000000000000000000000000000000000",
+    bookingTime: 0n,
+    checkInTime: 0n,
+    checkOutTime: 0n,
+    name: "Sunset Panoramic Suite",
+    roomType: "Suite",
+    imageUrl: "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&auto=format&fit=crop&q=80",
+    isActive: true,
+  },
+  {
+    id: 5n,
+    pricePerNight: ethers.parseEther("0.05"),
+    totalPrice: 0n,
+    status: 0,
+    occupant: "0x0000000000000000000000000000000000000000",
+    bookingTime: 0n,
+    checkInTime: 0n,
+    checkOutTime: 0n,
+    name: "Private Garden Pool Villa",
+    roomType: "Penthouse",
+    imageUrl: "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&auto=format&fit=crop&q=80",
+    isActive: true,
+  },
 ];
 
 async function getWorkingProvider(): Promise<ethers.Provider> {
@@ -244,6 +272,22 @@ export function useContract() {
     [sendTx]
   );
 
+  const bookRoomsBatch = useCallback(
+    (
+      roomIds: bigint[],
+      checkInTimestamps: number[],
+      checkOutTimestamps: number[],
+      totalDepositWei: bigint
+    ) => {
+      return sendTx((c) =>
+        c.bookRoomsBatch(roomIds, checkInTimestamps, checkOutTimestamps, {
+          value: totalDepositWei,
+        })
+      );
+    },
+    [sendTx]
+  );
+
   const cancelReservation = useCallback(
     (roomId: bigint) => {
       return sendTx((c) => c.cancelReservation(roomId));
@@ -258,9 +302,25 @@ export function useContract() {
     [sendTx]
   );
 
+  const payRemainingBatch = useCallback(
+    (roomIds: bigint[], totalRemainingWei: bigint) => {
+      return sendTx((c) =>
+        c.payRemainingBatch(roomIds, { value: totalRemainingWei })
+      );
+    },
+    [sendTx]
+  );
+
   const checkoutRoom = useCallback(
     (roomId: bigint) => {
       return sendTx((c) => c.checkoutRoom(roomId));
+    },
+    [sendTx]
+  );
+
+  const checkoutRoomBatch = useCallback(
+    (roomIds: bigint[]) => {
+      return sendTx((c) => c.checkoutRoomBatch(roomIds));
     },
     [sendTx]
   );
@@ -377,9 +437,12 @@ export function useContract() {
     fetchRooms,
     // Customer
     bookRoom,
+    bookRoomsBatch,
     cancelReservation,
     payRemaining,
+    payRemainingBatch,
     checkoutRoom,
+    checkoutRoomBatch,
     expireBooking,
     // Staff & IoT Key
     confirmCheckIn,

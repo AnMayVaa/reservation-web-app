@@ -5,6 +5,8 @@ import { useWallet } from "@/hooks/useWallet";
 import RoomGrid from "@/components/RoomGrid";
 import OwnerPanel from "@/components/OwnerPanel";
 import ReceptionistPanel from "@/components/ReceptionistPanel";
+import FloatingCartBar from "@/components/Cart/FloatingCartBar";
+import CartModal from "@/components/Cart/CartModal";
 
 export default function Home() {
   const { role, isConnected, isCorrectNetwork, connect, switchToSepolia } = useWallet();
@@ -177,6 +179,10 @@ export default function Home() {
         <p>PremiumHotel Smart Contract · Sepolia Testnet · ERC-Solidity 0.8.20</p>
         <p className="text-[11px] text-slate-600">Built with Next.js 14, Tailwind CSS, Hardhat & ethers.js v6</p>
       </footer>
+
+      {/* Floating Cart Bar & Batch Checkout Modal */}
+      <FloatingCartBar />
+      <CartModal />
     </div>
   );
 }

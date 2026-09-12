@@ -1,10 +1,10 @@
 // ============================================================
 // Contract Configuration
-// Deployed on Ethereum Sepolia Testnet (PremiumHotel v3)
+// Deployed on Ethereum Sepolia Testnet (PremiumHotel v4)
 // ============================================================
 
 export const CONTRACT_ADDRESS: `0x${string}` =
-  "0x8Ed901d11056faFA8C728FE93E2a0d8884Ec0f02";
+  "0x913D2b64f5b0117341546F13071d2326c2352a5b";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_CHAIN_ID_HEX = "0xaa36a7";

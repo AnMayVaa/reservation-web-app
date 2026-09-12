@@ -5,9 +5,11 @@ import Link from "next/link";
 import { CONTRACT_ADDRESS } from "@/lib/constants";
 import WalletButton from "@/components/WalletButton";
 import GasGuideModal from "@/components/Modals/GasGuideModal";
+import { useCart } from "@/hooks/useCart";
 
 export default function Navbar() {
   const [isGasGuideOpen, setIsGasGuideOpen] = useState(false);
+  const { totalRooms, setIsCartOpen } = useCart();
 
   const isContractConfigured =
     CONTRACT_ADDRESS &&
@@ -28,17 +30,31 @@ export default function Navbar() {
                   PremiumHotel
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                  v3
+                  v4
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
-                Decentralized Hospitality on Sepolia
+                Multi-Room Web3 Hospitality on Sepolia
               </p>
             </div>
           </Link>
 
-          {/* Right Side Links & Wallet */}
+          {/* Right Side Links, Cart & Wallet */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Cart Button */}
+            <button
+              onClick={() => setIsCartOpen(true)}
+              className="relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-xs font-bold text-amber-300 transition cursor-pointer"
+            >
+              <span>🛒</span>
+              <span className="hidden sm:inline">Cart</span>
+              {totalRooms > 0 && (
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 text-[10px] font-black flex items-center justify-center ml-0.5 animate-pulse">
+                  {totalRooms}
+                </span>
+              )}
+            </button>
+
             {/* Gas Guide Button (Teacher Feature) */}
             <button
               onClick={() => setIsGasGuideOpen(true)}

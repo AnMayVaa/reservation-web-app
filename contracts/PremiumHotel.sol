@@ -2,14 +2,15 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title PremiumHotel v3
+ * @title PremiumHotel v4
  * @notice Decentralized Hotel Reservation Smart Contract featuring:
  *  - Date/Time based reservations (Check-in & Check-out timestamps)
+ *  - Single-Room & Multi-Room Batch Booking (Shopping Cart support in 1 atomic transaction)
  *  - Dynamic pricing based on number of nights
- *  - 2-Step payment (50% deposit + 50% balance)
+ *  - 2-Step payment (50% deposit + 50% balance) with batch payment support
  *  - 24-Hour cancellation refund guarantee
  *  - Guest Self-Checkout & Auto-Expiry reset
- *  - Contactless IoT Digital Door Lock compatibility (EIP-191 / TOTP off-chain verification)
+ *  - Contactless IoT Digital Door Lock compatibility (EIP-191 / Door OTP off-chain verification)
  *  - Multi-receptionist management & custom owner withdrawals
  */
 contract PremiumHotel {
@@ -102,10 +103,12 @@ contract PremiumHotel {
         isReceptionist[msg.sender] = true;
         receptionistsList.push(msg.sender);
 
-        // Pre-create initial luxury rooms with per-night rates
+        // Pre-create 5 initial luxury rooms with per-night rates
         _createRoom(0.02 ether, "Ocean View Deluxe", "Deluxe", "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&auto=format&fit=crop&q=80");
         _createRoom(0.04 ether, "Executive Sky Suite", "Suite", "https://images.unsplash.com/photo-1618773928121-c32242e63f39?w=800&auto=format&fit=crop&q=80");
         _createRoom(0.06 ether, "Presidential Royal Villa", "Penthouse", "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&auto=format&fit=crop&q=80");
+        _createRoom(0.03 ether, "Sunset Panoramic Suite", "Suite", "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800&auto=format&fit=crop&q=80");
+        _createRoom(0.05 ether, "Private Garden Pool Villa", "Penthouse", "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&auto=format&fit=crop&q=80");
     }
 
     function _createRoom(
@@ -133,13 +136,10 @@ contract PremiumHotel {
     }
 
     // ==========================================
-    // 5. Customer Functions (Guests & Bookings)
+    // 5. Customer Functions (Single & Multi-Room Batch)
     // ==========================================
     
-    /// @notice Book a room for a specific check-in and check-out date/time range
-    /// @param _roomId Room ID to book
-    /// @param _checkInTime Unix timestamp of check-in
-    /// @param _checkOutTime Unix timestamp of check-out
+    /// @notice Book a single room for a specific check-in and check-out date/time range
     function bookRoom(
         uint256 _roomId,
         uint256 _checkInTime,
@@ -153,7 +153,6 @@ contract PremiumHotel {
         require(_checkInTime >= block.timestamp - 600, "Check-in time cannot be in the past");
         require(_checkOutTime > _checkInTime, "Check-out time must be after check-in");
 
-        // Calculate nights (ceiling division, minimum 1 night)
         uint256 duration = _checkOutTime - _checkInTime;
         uint256 nights = (duration + 86399) / 86400;
         if (nights == 0) nights = 1;
@@ -170,6 +169,57 @@ contract PremiumHotel {
         room.checkOutTime = _checkOutTime;
 
         emit RoomBooked(_roomId, msg.sender, msg.value, _checkInTime, _checkOutTime, nights);
+    }
+
+    /// @notice Batch book multiple rooms with independent check-in and check-out dates/times in 1 transaction
+    /// @param _roomIds Array of room IDs to book
+    /// @param _checkInTimes Array of check-in timestamps corresponding to each room
+    /// @param _checkOutTimes Array of check-out timestamps corresponding to each room
+    function bookRoomsBatch(
+        uint256[] calldata _roomIds,
+        uint256[] calldata _checkInTimes,
+        uint256[] calldata _checkOutTimes
+    ) public payable {
+        require(_roomIds.length > 0, "No rooms provided");
+        require(
+            _roomIds.length == _checkInTimes.length && _roomIds.length == _checkOutTimes.length,
+            "Array lengths mismatch"
+        );
+
+        uint256 totalDepositRequired = 0;
+
+        for (uint256 i = 0; i < _roomIds.length; i++) {
+            uint256 roomId = _roomIds[i];
+            uint256 checkIn = _checkInTimes[i];
+            uint256 checkOut = _checkOutTimes[i];
+
+            require(roomId > 0 && roomId <= totalRooms, "Invalid room ID");
+            Room storage room = rooms[roomId];
+
+            require(room.isActive, "Room is currently deactivated for maintenance");
+            require(room.status == RoomStatus.Available, "Room is not available for booking");
+            require(checkIn >= block.timestamp - 600, "Check-in time cannot be in the past");
+            require(checkOut > checkIn, "Check-out time must be after check-in");
+
+            uint256 duration = checkOut - checkIn;
+            uint256 nights = (duration + 86399) / 86400;
+            if (nights == 0) nights = 1;
+
+            uint256 totalCost = nights * room.pricePerNight;
+            uint256 depositRequired = totalCost / 2;
+            totalDepositRequired += depositRequired;
+
+            room.totalPrice = totalCost;
+            room.status = RoomStatus.Booked;
+            room.occupant = msg.sender;
+            room.bookingTime = block.timestamp;
+            room.checkInTime = checkIn;
+            room.checkOutTime = checkOut;
+
+            emit RoomBooked(roomId, msg.sender, depositRequired, checkIn, checkOut, nights);
+        }
+
+        require(msg.value == totalDepositRequired, "Must pay exact combined 50% deposit for all rooms");
     }
 
     /// @notice Cancel booking. If cancelled within 24h, 50% deposit is refunded.
@@ -212,6 +262,29 @@ contract PremiumHotel {
         emit RemainingPaid(_roomId, msg.sender, msg.value);
     }
 
+    /// @notice Batch pay remaining 50% balance for multiple rooms in 1 transaction
+    function payRemainingBatch(uint256[] calldata _roomIds) public payable {
+        require(_roomIds.length > 0, "No rooms provided");
+        uint256 totalRemainingRequired = 0;
+
+        for (uint256 i = 0; i < _roomIds.length; i++) {
+            uint256 roomId = _roomIds[i];
+            require(roomId > 0 && roomId <= totalRooms, "Invalid room ID");
+            Room storage room = rooms[roomId];
+
+            require(room.status == RoomStatus.Booked, "Room is not in Booked status");
+            require(msg.sender == room.occupant, "Only occupant can pay remaining balance");
+
+            uint256 remainingRequired = room.totalPrice - (room.totalPrice / 2);
+            totalRemainingRequired += remainingRequired;
+
+            room.status = RoomStatus.PaidWaitingForKey;
+            emit RemainingPaid(roomId, msg.sender, remainingRequired);
+        }
+
+        require(msg.value == totalRemainingRequired, "Must pay exact combined remaining balance");
+    }
+
     /// @notice Guest check-out / room release (callable by occupant or staff)
     function checkoutRoom(uint256 _roomId) public onlyStaffOrOccupant(_roomId) {
         require(_roomId > 0 && _roomId <= totalRooms, "Invalid room ID");
@@ -229,6 +302,14 @@ contract PremiumHotel {
         room.totalPrice = 0;
 
         emit CheckedOut(_roomId, msg.sender);
+    }
+
+    /// @notice Batch check-out multiple rooms simultaneously
+    function checkoutRoomBatch(uint256[] calldata _roomIds) public {
+        require(_roomIds.length > 0, "No rooms provided");
+        for (uint256 i = 0; i < _roomIds.length; i++) {
+            checkoutRoom(_roomIds[i]);
+        }
     }
 
     /// @notice Anyone or staff can expire/reset a room if the checkOutTime has elapsed

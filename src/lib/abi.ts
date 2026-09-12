@@ -371,6 +371,29 @@ export const PREMIUM_HOTEL_ABI = [
   {
     "inputs": [
       {
+        "internalType": "uint256[]",
+        "name": "_roomIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "_checkInTimes",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "_checkOutTimes",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "bookRoomsBatch",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
         "name": "_roomId",
         "type": "uint256"
@@ -390,6 +413,19 @@ export const PREMIUM_HOTEL_ABI = [
       }
     ],
     "name": "checkoutRoom",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "_roomIds",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "checkoutRoomBatch",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -648,6 +684,19 @@ export const PREMIUM_HOTEL_ABI = [
       }
     ],
     "name": "payRemaining",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "_roomIds",
+        "type": "uint256[]"
+      }
+    ],
+    "name": "payRemainingBatch",
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
